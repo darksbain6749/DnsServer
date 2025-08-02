@@ -17,8 +17,9 @@
 
   <ItemGroup>
     <Reference Include="TechnitiumLibrary.Net">
-      <HintPath>..\..\TechnitiumLibrary\bin\TechnitiumLibrary.Net.dll</HintPath>
-      <Private>false</Private>
+      <HintPath>C:\Users\cmlub\source\repos\DnsServer\TechnitiumLibrary\bin\TechnitiumLibrary.Net.dll</HintPath>
+      <!--<HintPath>..\..\TechnitiumLibrary\bin\TechnitiumLibrary.Net.dll</HintPath>-->
+      <Private>True</Private>
     </Reference>
   </ItemGroup>
 

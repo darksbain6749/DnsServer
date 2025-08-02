@@ -314,6 +314,25 @@ namespace DnsServerCore
                 Utf8JsonWriter jsonWriter = context.GetCurrentJsonWriter();
                 WriteCurrentSessionDetails(jsonWriter, session, includeInfo);
             }
+            public async Task LoginAsyncOIDC(HttpContext context, UserSessionType sessionType, string username)
+            {
+                HttpRequest request = context.Request;
+
+                //string username = request.GetQueryOrForm("user");
+                //string password = request.GetQueryOrForm("pass");
+                string tokenName = (sessionType == UserSessionType.ApiToken) ? request.GetQueryOrForm("tokenName") : null;
+                bool includeInfo = request.GetQueryOrForm("includeInfo", bool.Parse, false);
+                IPEndPoint remoteEP = context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader);
+
+                UserSession session = await _dnsWebService._authManager.CreateSessionAsyncOIDC(sessionType, tokenName, username, remoteEP.Address, request.Headers.UserAgent);
+
+                _dnsWebService._log.Write(remoteEP, "[" + session.User.Username + "] User logged in.");
+
+                _dnsWebService._authManager.SaveConfigFile();
+
+                Utf8JsonWriter jsonWriter = context.GetCurrentJsonWriter();
+                WriteCurrentSessionDetails(jsonWriter, session, includeInfo);
+            }
 
             public void Logout(HttpContext context)
             {

@@ -21,7 +21,9 @@
 
 	<ItemGroup>
 		<Reference Include="TechnitiumLibrary.Net.Firewall">
-			<HintPath>..\..\TechnitiumLibrary\bin\TechnitiumLibrary.Net.Firewall.dll</HintPath>
+      <HintPath>..\..\TechnitiumLibrary\bin\TechnitiumLibrary.Net.dll</HintPath>
+			<!--<HintPath>..\..\TechnitiumLibrary\bin\TechnitiumLibrary.Net.Firewall.dll</HintPath>-->
+      <Private>true</Private>
 		</Reference>
 	</ItemGroup>
 

@@ -204,7 +204,7 @@ function login(username, password) {
     var btn = $("#btnLogin").button('loading');
 
     HTTPRequest({
-        url: "api/user/login?user=" + encodeURIComponent(username) + "&pass=" + encodeURIComponent(password) + "&includeInfo=true",
+        url: "api/user/login?user=" + encodeURIComponent(username) + "&pass=" + encodeURIComponent(password) + "&includeInfo=true", method: "POST",
         success: function (responseJSON) {
             sessionData = responseJSON;
             localStorage.setItem("token", sessionData.token);

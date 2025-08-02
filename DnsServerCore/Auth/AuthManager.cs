@@ -697,6 +697,36 @@ namespace DnsServerCore.Auth
             return session;
         }
 
+        public async Task<UserSession> CreateSessionAsyncOIDC(UserSessionType type, string tokenName, string username, IPAddress remoteAddress, string userAgent)
+        {
+            IPAddress network = GetClientNetwork(remoteAddress);
+
+            if (IsNetworkBlocked(network))
+                throw new DnsWebServiceException("Max limit of " + MAX_LOGIN_ATTEMPTS + " attempts exceeded. Access blocked for " + (BLOCK_NETWORK_INTERVAL / 1000) + " seconds.");
+
+            User user = GetUser(username);
+
+            if ((user is null))
+            {
+
+                throw new DnsWebServiceException("Invalid username for user: " + username);
+            }
+
+            ResetFailedLoginAttempts(network);
+
+            if (user.Disabled)
+                throw new DnsWebServiceException("User account is disabled. Please contact your administrator.");
+
+            UserSession session = new UserSession(type, tokenName, user, remoteAddress, userAgent);
+
+            if (!_sessions.TryAdd(session.Token, session))
+                throw new DnsWebServiceException("Error while creating session. Please try again.");
+
+            user.LoggedInFrom(remoteAddress);
+
+            return session;
+        }
+
         public UserSession CreateApiToken(string tokenName, string username, IPAddress remoteAddress, string userAgent)
         {
             User user = GetUser(username);

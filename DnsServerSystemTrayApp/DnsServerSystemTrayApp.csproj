@@ -22,10 +22,12 @@
 
 	<ItemGroup>
 		<Reference Include="TechnitiumLibrary.IO">
-			<HintPath>..\..\TechnitiumLibrary\bin\TechnitiumLibrary.IO.dll</HintPath>
+      <HintPath>C:\Users\cmlub\source\repos\DnsServer\TechnitiumLibrary\bin\TechnitiumLibrary.IO.dll</HintPath>
+			<!--<HintPath>..\..\TechnitiumLibrary\bin\TechnitiumLibrary.IO.dll</HintPath>-->
 		</Reference>
 		<Reference Include="TechnitiumLibrary.Net">
-			<HintPath>..\..\TechnitiumLibrary\bin\TechnitiumLibrary.Net.dll</HintPath>
+      <HintPath>C:\Users\cmlub\source\repos\DnsServer\TechnitiumLibrary\bin\TechnitiumLibrary.Net.dll</HintPath>
+			<!--<HintPath>..\..\TechnitiumLibrary\bin\TechnitiumLibrary.Net.dll</HintPath>-->
 		</Reference>
 	</ItemGroup>
 

@@ -28,7 +28,7 @@ using System.Threading.Tasks;
 using TechnitiumLibrary;
 using TechnitiumLibrary.Net.Dns;
 using TechnitiumLibrary.Net.Dns.ResourceRecords;
-using TechnitiumLibrary.Net.Mail;
+using TechnitiumLibrary.Net;
 
 namespace Failover
 {
@@ -49,7 +49,7 @@ namespace Failover
         string _password;
         MailAddress _mailFrom;
 
-        readonly SmtpClientEx _smtpClient;
+        //readonly SmtpClientEx _smtpClient;
 
         #endregion
 

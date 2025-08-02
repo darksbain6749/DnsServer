@@ -28,6 +28,8 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,8 +37,11 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.IO;
+using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Net.Mail;
 using System.Net.Quic;
 using System.Net.Security;
@@ -46,6 +51,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using TechnitiumLibrary;
@@ -460,7 +466,108 @@ namespace DnsServerCore
                     return false;
             }
         }
+        #region oauth2 Auth
 
+        public class TokenResponse
+        {
+            [JsonPropertyName("access_token")]
+            public string AccessToken { get; set; }
+
+            [JsonPropertyName("id_token")]
+            public string IdToken { get; set; }
+
+            [JsonPropertyName("refresh_token")]
+            public string RefreshToken { get; set; }
+        }
+
+
+        private TokenResponse? ExchangeCodeForTokens(string code)
+        {
+            var client = new HttpClient();
+            var tokenEndpoint = "https://my-auth-endpoint";
+
+            var parameters = new Dictionary<string, string>
+    {
+        { "grant_type", "authorization_code" },
+        { "code", code },
+        { "redirect_uri", "http://my-server/api/auth/callback" },
+        { "client_id", "technitium-dns" },
+        { "client_secret", "my-key" }
+    };
+
+            var response = client.PostAsync(tokenEndpoint, new FormUrlEncodedContent(parameters)).Result;
+
+            if (!response.IsSuccessStatusCode)
+                return null;
+            //client.PostAsync(tokenEndpoint, new FormUrlEncodedContent(parameters));
+            //if (!response.IsCompletedSuccessfully)
+            //return null;
+
+            //var content =  response.Content.ReadAsStringAsync();
+            //var content = response.Result.ToString();
+            var content = response.Content.ReadAsStringAsync().Result;
+            return JsonSerializer.Deserialize<TokenResponse>(content);
+        }
+
+
+        private UserInfo? ParseIdToken(string idToken)
+        {
+            var handler = new JwtSecurityTokenHandler();
+            var jwt = handler.ReadJwtToken(idToken);
+
+            var email = jwt.Claims.FirstOrDefault(c => c.Type == "email")?.Value;
+            var name = jwt.Claims.FirstOrDefault(c => c.Type == "name")?.Value;
+            var username = jwt.Claims.FirstOrDefault(c => c.Type == "preferred_username")?.Value;
+
+            if (string.IsNullOrEmpty(email))
+                return null;
+
+            return new UserInfo { Email = email, Name = name, UserName = username };
+        }
+
+        public class UserInfo
+        {
+            public string Email { get; set; }
+            public string Name { get; set; }
+            public string UserName { get; set; }
+        }
+
+        //public string AuthenticateExternalUser(string email)
+        //{
+
+        //    if (string.IsNullOrWhiteSpace(email))
+        //        throw new ArgumentException("Email is required.");
+
+            // Optionally check if the user exists in your internal store
+            //HttpRequest request = context.Request;
+
+            //string username = request.GetQueryOrForm("user");
+            //string password = request.GetQueryOrForm("pass");
+            //string tokenName = (sessionType == UserSessionType.ApiToken) ? request.GetQueryOrForm("tokenName") : null;
+            //bool includeInfo = request.GetQueryOrForm("includeInfo", bool.Parse, false);
+            //IPEndPoint remoteEP = context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader);
+
+            //UserSession session = await _dnsWebService._authManager.CreateSessionAsync(sessionType, tokenName, username, password, remoteEP.Address, request.Headers.UserAgent);
+
+            //_dnsWebService._log.Write(remoteEP, "[" + session.User.Username + "] User logged in.");
+
+            //_dnsWebService._authManager.SaveConfigFile();
+
+            //Utf8JsonWriter jsonWriter = context.GetCurrentJsonWriter();
+            //WriteCurrentSessionDetails(jsonWriter, session, includeInfo);
+            //var user = UserStore.FindByEmail(email);
+            //if (user == null)
+            //{
+            //    // Auto-create user or deny access
+            //    user = UserStore.CreateUser(email);
+            //}
+
+            //// Reuse existing token generation logic
+            //var token = GenerateAuthToken(email);
+            //return token;
+        //}
+
+        #endregion
         private void ConfigureWebServiceRoutes()
         {
             _webService.UseExceptionHandler(WebServiceExceptionHandler);
@@ -470,6 +577,28 @@ namespace DnsServerCore
             _webService.UseRouting();
 
             //user auth
+
+            _ = _webService.MapGetAndPost("/api/auth/callback", delegate (HttpContext context)
+            {
+                var code = context.Request.Query["code"];
+                if (string.IsNullOrEmpty(code))
+                    return null;// Results.BadRequest("Missing authorization code.");
+
+                TokenResponse tokenResponse = ExchangeCodeForTokens(code);
+                if (tokenResponse == null)
+                    return null;// Results.Unauthorized();
+
+                UserInfo userInfo = ParseIdToken(tokenResponse.IdToken);
+                if (userInfo == null)
+                    return null;// Results.Unauthorized();
+
+                var user = _authManager.GetUser(userInfo.UserName);
+                if (user == null)
+                    _authManager.CreateUser(userInfo.UserName, userInfo.UserName, "dsfdsdsgdfgsdfsfh");
+                //var technitiumToken = TokenService.GenerateToken(user);
+
+                return _authApi.LoginAsyncOIDC(context, UserSessionType.Standard, userInfo.UserName); //Results.Redirect($"/api/dashboard/stats/get?token={technitiumToken}");
+            });
             _webService.MapGetAndPost("/api/user/login", delegate (HttpContext context) { return _authApi.LoginAsync(context, UserSessionType.Standard); });
             _webService.MapGetAndPost("/api/user/createToken", delegate (HttpContext context) { return _authApi.LoginAsync(context, UserSessionType.ApiToken); });
             _webService.MapGetAndPost("/api/user/logout", _authApi.Logout);
@@ -623,6 +752,7 @@ namespace DnsServerCore
 
             switch (context.Request.Path)
             {
+                case "/api/auth/callback": //Leave callback out of needing token
                 case "/api/user/login":
                 case "/api/user/createToken":
                 case "/api/user/logout":

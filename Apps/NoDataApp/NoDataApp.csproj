@@ -19,14 +19,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\DnsServerCore.ApplicationCommon\DnsServerCore.ApplicationCommon.csproj">
-      <Private>false</Private>
+      <Private>true</Private>
     </ProjectReference>
   </ItemGroup>
 
   <ItemGroup>
     <Reference Include="TechnitiumLibrary.Net">
       <HintPath>..\..\..\TechnitiumLibrary\bin\TechnitiumLibrary.Net.dll</HintPath>
-      <Private>false</Private>
+      <Private>true</Private>
     </Reference>
   </ItemGroup>
 

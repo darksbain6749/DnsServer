@@ -27,20 +27,25 @@
 	<ItemGroup>
 		<Reference Include="TechnitiumLibrary">
 			<HintPath>..\..\TechnitiumLibrary\bin\TechnitiumLibrary.dll</HintPath>
+      <Private>true</Private>
 		</Reference>
 		<Reference Include="TechnitiumLibrary.ByteTree">
 			<HintPath>..\..\TechnitiumLibrary\bin\TechnitiumLibrary.ByteTree.dll</HintPath>
+      <Private>true</Private>
 		</Reference>
 		<Reference Include="TechnitiumLibrary.IO">
 			<HintPath>..\..\TechnitiumLibrary\bin\TechnitiumLibrary.IO.dll</HintPath>
+      <Private>true</Private>
 		</Reference>
 		<Reference Include="TechnitiumLibrary.Net">
 			<HintPath>..\..\TechnitiumLibrary\bin\TechnitiumLibrary.Net.dll</HintPath>
+      <Private>true</Private>
 		</Reference>
 	</ItemGroup>
 
 	<ItemGroup>
 		<PackageReference Include="BouncyCastle.Cryptography" Version="2.5.1" />
+		<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.5.0" />
 	</ItemGroup>
 
 	<ItemGroup>
