@@ -24,7 +24,8 @@ var quickForwardersList = null;
 
 
 window.onload = function () {
-    conosle.log("I ran on load");
+    console.log("I ran on load");
+    console.log(window.location.pathname);
     if (window.location.pathname == "/return")
         oidcCallback();
 };
