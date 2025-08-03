@@ -37,6 +37,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
+using System.Formats.Asn1;
 using System.IdentityModel.Tokens.Jwt;
 using System.IO;
 using System.Linq;
@@ -47,6 +48,7 @@ using System.Net.Quic;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Reflection.Metadata;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -484,15 +486,15 @@ namespace DnsServerCore
         private TokenResponse? ExchangeCodeForTokens(string code)
         {
             var client = new HttpClient();
-            var tokenEndpoint = "https://my-auth-endpoint";
+            var tokenEndpoint = "https://daedalus.darksbain.carpanet/realms/carpanet/protocol/openid-connect/token";
 
             var parameters = new Dictionary<string, string>
     {
         { "grant_type", "authorization_code" },
         { "code", code },
-        { "redirect_uri", "http://my-server/api/auth/callback" },
+        { "redirect_uri", "http://lubyhpenvy:5380/api/auth/callback" },
         { "client_id", "technitium-dns" },
-        { "client_secret", "my-key" }
+        { "client_secret", "LAbbwKh5zgbi8qkhDLwO8g28wBQxFCqd" }
     };
 
             var response = client.PostAsync(tokenEndpoint, new FormUrlEncodedContent(parameters)).Result;
@@ -532,40 +534,6 @@ namespace DnsServerCore
             public string UserName { get; set; }
         }
 
-        //public string AuthenticateExternalUser(string email)
-        //{
-
-        //    if (string.IsNullOrWhiteSpace(email))
-        //        throw new ArgumentException("Email is required.");
-
-            // Optionally check if the user exists in your internal store
-            //HttpRequest request = context.Request;
-
-            //string username = request.GetQueryOrForm("user");
-            //string password = request.GetQueryOrForm("pass");
-            //string tokenName = (sessionType == UserSessionType.ApiToken) ? request.GetQueryOrForm("tokenName") : null;
-            //bool includeInfo = request.GetQueryOrForm("includeInfo", bool.Parse, false);
-            //IPEndPoint remoteEP = context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader);
-
-            //UserSession session = await _dnsWebService._authManager.CreateSessionAsync(sessionType, tokenName, username, password, remoteEP.Address, request.Headers.UserAgent);
-
-            //_dnsWebService._log.Write(remoteEP, "[" + session.User.Username + "] User logged in.");
-
-            //_dnsWebService._authManager.SaveConfigFile();
-
-            //Utf8JsonWriter jsonWriter = context.GetCurrentJsonWriter();
-            //WriteCurrentSessionDetails(jsonWriter, session, includeInfo);
-            //var user = UserStore.FindByEmail(email);
-            //if (user == null)
-            //{
-            //    // Auto-create user or deny access
-            //    user = UserStore.CreateUser(email);
-            //}
-
-            //// Reuse existing token generation logic
-            //var token = GenerateAuthToken(email);
-            //return token;
-        //}
 
         #endregion
         private void ConfigureWebServiceRoutes()
@@ -597,8 +565,26 @@ namespace DnsServerCore
                     _authManager.CreateUser(userInfo.UserName, userInfo.UserName, "dsfdsdsgdfgsdfsfh");
                 //var technitiumToken = TokenService.GenerateToken(user);
 
-                return _authApi.LoginAsyncOIDC(context, UserSessionType.Standard, userInfo.UserName); //Results.Redirect($"/api/dashboard/stats/get?token={technitiumToken}");
+                var displayName = user.DisplayName;
+                var username = user.Username;
+                Task<UserSession> session = _authApi.LoginAsyncOIDC(context, UserSessionType.Standard, userInfo.UserName);
+                string token = session.Result.Token;
+
+
+                string version = GetServerVersion();
+                DateTime uptime = _uptimestamp;
+                string dnsServerDomain = _dnsServer.ServerDomain;
+                uint defaultRecordTtl = _zonesApi.DefaultRecordTtl;
+                bool dnssecValidation = _dnsServer.DnssecValidation;
+
+
+
+                return Results.Redirect($"/return#token={token}&displayName={displayName}&version={version}&" +
+                    $"dnsServerDomain={dnsServerDomain}&defaultRecordTtl={defaultRecordTtl}&uptimestamp={uptime}");
             });
+
+
+
             _webService.MapGetAndPost("/api/user/login", delegate (HttpContext context) { return _authApi.LoginAsync(context, UserSessionType.Standard); });
             _webService.MapGetAndPost("/api/user/createToken", delegate (HttpContext context) { return _authApi.LoginAsync(context, UserSessionType.ApiToken); });
             _webService.MapGetAndPost("/api/user/logout", _authApi.Logout);
@@ -795,6 +781,8 @@ namespace DnsServerCore
                         context.Items["session"] = session;
                         needsJsonResponseObject = true;
                     }
+                    else if (context.Request.Path.Value.StartsWith("/return", StringComparison.OrdinalIgnoreCase))
+                    { return; }
                     else
                     {
                         context.Response.StatusCode = StatusCodes.Status404NotFound;
@@ -825,21 +813,23 @@ namespace DnsServerCore
                 {
                     await next(context);
                 }
+                if (context.Request.Path != "/return" && context.Request.Path != "/api/auth/callback")
+                {
+                    jsonWriter.WriteString("status", "ok");
 
-                jsonWriter.WriteString("status", "ok");
+                    jsonWriter.WriteEndObject();
+                    jsonWriter.Flush();
 
-                jsonWriter.WriteEndObject();
-                jsonWriter.Flush();
+                    mS.Position = 0;
 
-                mS.Position = 0;
+                    HttpResponse response = context.Response;
 
-                HttpResponse response = context.Response;
+                    response.StatusCode = StatusCodes.Status200OK;
+                    response.ContentType = "application/json; charset=utf-8";
+                    response.ContentLength = mS.Length;
 
-                response.StatusCode = StatusCodes.Status200OK;
-                response.ContentType = "application/json; charset=utf-8";
-                response.ContentLength = mS.Length;
-
-                await mS.CopyToAsync(response.Body);
+                    await mS.CopyToAsync(response.Body);
+                }
             }
         }
 

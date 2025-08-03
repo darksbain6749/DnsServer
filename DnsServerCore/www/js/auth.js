@@ -230,7 +230,25 @@ function login(username, password) {
         }
     });
 }
+function loginOIDC() {
 
+}
+
+function oidcCallback() {
+    const hash = window.location.hash.substring(1);
+    const sessionData = new URLSearchParams(hash);
+
+    localStorage.setItem("token", sessionData.token);
+    console.log("I ran!");
+    $("#mnuUserDisplayName").text(sessionData.displayName);
+    document.title = sessionData.dnsServerDomain + " - " + "Technitium DNS Server v" + sessionData.version;
+    $("#lblAboutVersion").text(sessionData.version);
+    $("#lblAboutUptime").text(moment(sessionData.uptimestamp).local().format("lll") + " (" + moment(sessionData.uptimestamp).fromNow() + ")");
+    $("#lblDnsServerDomain").text(" - " + sessionData.dnsServerDomain);
+    $("#txtAddEditRecordTtl").attr("placeholder", sessionData.defaultRecordTtl);
+    console.log(sessionData.toString());
+    showPageMain();
+}
 function logout() {
     HTTPRequest({
         url: "api/user/logout?token=" + sessionData.token,

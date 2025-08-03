@@ -314,7 +314,7 @@ namespace DnsServerCore
                 Utf8JsonWriter jsonWriter = context.GetCurrentJsonWriter();
                 WriteCurrentSessionDetails(jsonWriter, session, includeInfo);
             }
-            public async Task LoginAsyncOIDC(HttpContext context, UserSessionType sessionType, string username)
+            public async Task<UserSession> LoginAsyncOIDC(HttpContext context, UserSessionType sessionType, string username)
             {
                 HttpRequest request = context.Request;
 
@@ -332,6 +332,9 @@ namespace DnsServerCore
 
                 Utf8JsonWriter jsonWriter = context.GetCurrentJsonWriter();
                 WriteCurrentSessionDetails(jsonWriter, session, includeInfo);
+
+                return session;
+
             }
 
             public void Logout(HttpContext context)

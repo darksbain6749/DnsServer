@@ -22,6 +22,12 @@ var reverseProxyDetected = false;
 var quickBlockLists = null;
 var quickForwardersList = null;
 
+
+window.onload = function () {
+    conosle.log("I ran on load");
+    if (window.location.pathname == "/return")
+        oidcCallback();
+};
 function showPageLogin() {
     hideAlert();
 
