@@ -562,7 +562,10 @@ namespace DnsServerCore
 
                 var user = _authManager.GetUser(userInfo.UserName);
                 if (user == null)
+                {
                     _authManager.CreateUser(userInfo.UserName, userInfo.UserName, "dsfdsdsgdfgsdfsfh");
+                    user = _authManager.GetUser(userInfo.UserName);
+                }
                 //var technitiumToken = TokenService.GenerateToken(user);
 
                 var displayName = user.DisplayName;
@@ -579,8 +582,8 @@ namespace DnsServerCore
 
 
 
-                return Results.Redirect($"/return#token={token}&displayName={displayName}&version={version}&" +
-                    $"dnsServerDomain={dnsServerDomain}&defaultRecordTtl={defaultRecordTtl}&uptimestamp={uptime}");
+                return Results.Redirect($"/#token={token}&displayName={displayName}&version={version}&" +
+                    $"dnsServerDomain={dnsServerDomain}&defaultRecordTtl={defaultRecordTtl}&uptimestamp={uptime}&oidcReturn=true");
             });
 
 
@@ -781,7 +784,7 @@ namespace DnsServerCore
                         context.Items["session"] = session;
                         needsJsonResponseObject = true;
                     }
-                    else if (context.Request.Path.Value.StartsWith("/return", StringComparison.OrdinalIgnoreCase))
+                    else if (context.Request.GetQueryOrForm("oidcCallback") == "true")
                     { return; }
                     else
                     {

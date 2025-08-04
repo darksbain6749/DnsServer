@@ -22,12 +22,10 @@ var reverseProxyDetected = false;
 var quickBlockLists = null;
 var quickForwardersList = null;
 
-
 window.onload = function () {
-    console.log("I ran on load");
-    console.log(window.location.pathname);
-    if (window.location.pathname == "/return")
-        oidcCallback();
+    oidcCallback();
+    window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+
 };
 function showPageLogin() {
     hideAlert();
