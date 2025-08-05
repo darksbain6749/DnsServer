@@ -231,30 +231,30 @@ function login(username, password) {
     });
 }
 function loginOIDC() {
-
+    window.location.href = "https://daedalus.darksbain.carpanet/realms/carpanet/protocol/openid-connect/auth?" +
+        "client_id=technitium-dns" +
+        "&response_type=code" +
+        "&scope=openid" +
+        "&redirect_uri=" + encodeURIComponent(window.location.origin + "/api/auth/callback");
 }
 
 function oidcCallback() {
     const hash = window.location.hash.substring(1);
 
     const sessionData = new URLSearchParams(hash);
-    console.log(sessionData.get("oidcReturn"));
-    console.log(sessionData.toString());
-    console.log(hash);
     if (sessionData.get("oidcReturn") =="true") {
 
         localStorage.setItem("token", sessionData.get("token"));
-        console.log("I ran in OIDC!");
         $("#mnuUserDisplayName").text(sessionData.get("displayName"));
         document.title = sessionData.get("dnsServerDomain") + " - " + "Technitium DNS Server v" + sessionData.get("version");
         $("#lblAboutVersion").text(sessionData.get("version"));
         $("#lblAboutUptime").text(moment(sessionData.get("uptimestamp")).local().format("lll") + " (" + moment(sessionData.get("uptimestamp")).fromNow() + ")");
         $("#lblDnsServerDomain").text(" - " + sessionData.get("dnsServerDomain"));
         $("#txtAddEditRecordTtl").attr("placeholder", sessionData.get("defaultRecordTtl"));
-        showPageMain();
 
         // This removes the #... part from the address bar without reloading the page
         window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+        showPageMain();
 
     }
 }

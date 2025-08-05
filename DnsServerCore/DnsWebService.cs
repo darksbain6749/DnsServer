@@ -492,7 +492,7 @@ namespace DnsServerCore
     {
         { "grant_type", "authorization_code" },
         { "code", code },
-        { "redirect_uri", "http://lubyhpenvy:5380/api/auth/callback" },
+        { "redirect_uri", "http://labyrinth:5380/api/auth/callback" },
         { "client_id", "technitium-dns" },
         { "client_secret", "LAbbwKh5zgbi8qkhDLwO8g28wBQxFCqd" }
     };
@@ -550,20 +550,21 @@ namespace DnsServerCore
             {
                 var code = context.Request.Query["code"];
                 if (string.IsNullOrEmpty(code))
-                    return null;// Results.BadRequest("Missing authorization code.");
+                    return Results.BadRequest("Missing authorization code.");
 
                 TokenResponse tokenResponse = ExchangeCodeForTokens(code);
                 if (tokenResponse == null)
-                    return null;// Results.Unauthorized();
+                    return Results.BadRequest("Token was invalid");// Results.Unauthorized();
 
                 UserInfo userInfo = ParseIdToken(tokenResponse.IdToken);
                 if (userInfo == null)
-                    return null;// Results.Unauthorized();
+                    return Results.Unauthorized();
 
-                var user = _authManager.GetUser(userInfo.UserName);
+                User user = _authManager.GetUser(userInfo.UserName);
                 if (user == null)
                 {
-                    _authManager.CreateUser(userInfo.UserName, userInfo.UserName, "dsfdsdsgdfgsdfsfh");
+                    user = _authManager.CreateUser(userInfo.UserName, userInfo.UserName, "dsfdsdsgdfgsdfsfh");
+                    user.AddToGroup(_authManager.GetGroup(Group.ADMINISTRATORS));
                     //labyrinth:5380/api/admin/users/&user=test&displayName=test&disabled=false&memberOfGroups=Administrators&_=1754357910357
                     user = _authManager.GetUser(userInfo.UserName);
                 }
@@ -785,7 +786,7 @@ namespace DnsServerCore
                         context.Items["session"] = session;
                         needsJsonResponseObject = true;
                     }
-                    else if (context.Request.GetQueryOrForm("oidcCallback") == "true")
+                    else if (context.Request.GetQueryOrForm("oidcReturn") == "true")
                     { return; }
                     else
                     {

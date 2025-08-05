@@ -40,21 +40,12 @@ function showPageLogin() {
         refreshTimerHandle = null;
     }
 
-    window.location.href = "https://daedalus.darksbain.carpanet/realms/carpanet/protocol/openid-connect/auth?" +
-        "client_id=technitium-dns" +
-        "&response_type=code" +
-        "&scope=openid" +
-        "&redirect_uri=" + encodeURIComponent(window.location.origin + "/api/auth/callback");
-
     $("#txtUser").val("");
     $("#txtPass").val("");
     $("#btnLogin").button('reset');
     $("#pageLogin").show();
 
     $("#txtUser").focus();
-
-
-
 
 }
 
