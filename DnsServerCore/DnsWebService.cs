@@ -486,15 +486,15 @@ namespace DnsServerCore
         private TokenResponse? ExchangeCodeForTokens(string code)
         {
             var client = new HttpClient();
-            var tokenEndpoint = "https://daedalus.darksbain.carpanet/realms/carpanet/protocol/openid-connect/token";
+            var tokenEndpoint = "<your endpoint";
 
             var parameters = new Dictionary<string, string>
     {
         { "grant_type", "authorization_code" },
         { "code", code },
-        { "redirect_uri", "http://labyrinth:5380/api/auth/callback" },
-        { "client_id", "technitium-dns" },
-        { "client_secret", "LAbbwKh5zgbi8qkhDLwO8g28wBQxFCqd" }
+        { "redirect_uri", "http://" + _dnsServer.ServerDomain + ":5380/api/auth/callback" },
+        { "client_id", "your client" },
+        { "client_secret", "Your secret" }
     };
 
             var response = client.PostAsync(tokenEndpoint, new FormUrlEncodedContent(parameters)).Result;
@@ -563,8 +563,8 @@ namespace DnsServerCore
                 User user = _authManager.GetUser(userInfo.UserName);
                 if (user == null)
                 {
-                    user = _authManager.CreateUser(userInfo.UserName, userInfo.UserName, "dsfdsdsgdfgsdfsfh");
-                    user.AddToGroup(_authManager.GetGroup(Group.ADMINISTRATORS));
+                    user = _authManager.CreateUser(userInfo.UserName, userInfo.UserName, "dsfdsdsgdfjhdfuyduyduduytgsdfsfh");
+                    user.AddToGroup(_authManager.GetGroup(Group.DNS_ADMINISTRATORS));
                     //labyrinth:5380/api/admin/users/&user=test&displayName=test&disabled=false&memberOfGroups=Administrators&_=1754357910357
                     user = _authManager.GetUser(userInfo.UserName);
                 }

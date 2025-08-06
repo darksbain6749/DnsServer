@@ -231,8 +231,8 @@ function login(username, password) {
     });
 }
 function loginOIDC() {
-    window.location.href = "https://daedalus.darksbain.carpanet/realms/carpanet/protocol/openid-connect/auth?" +
-        "client_id=technitium-dns" +
+    window.location.href = "Your client" +
+        "client_id=Your client" +
         "&response_type=code" +
         "&scope=openid" +
         "&redirect_uri=" + encodeURIComponent(window.location.origin + "/api/auth/callback");
