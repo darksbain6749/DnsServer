@@ -486,27 +486,21 @@ namespace DnsServerCore
         private TokenResponse? ExchangeCodeForTokens(string code)
         {
             var client = new HttpClient();
-            var tokenEndpoint = "<your endpoint";
+            var tokenEndpoint = "https://daedalus.darksbain.carpanet/realms/carpanet/protocol/openid-connect/token";
 
             var parameters = new Dictionary<string, string>
     {
         { "grant_type", "authorization_code" },
         { "code", code },
         { "redirect_uri", "http://" + _dnsServer.ServerDomain + ":5380/api/auth/callback" },
-        { "client_id", "your client" },
-        { "client_secret", "Your secret" }
+        { "client_id", "technitium-dns-np" },
+        { "client_secret", "pSFAbyJZeaUBLkpLdgwFfrEkF7A9rTBv" }
     };
 
             var response = client.PostAsync(tokenEndpoint, new FormUrlEncodedContent(parameters)).Result;
 
             if (!response.IsSuccessStatusCode)
                 return null;
-            //client.PostAsync(tokenEndpoint, new FormUrlEncodedContent(parameters));
-            //if (!response.IsCompletedSuccessfully)
-            //return null;
-
-            //var content =  response.Content.ReadAsStringAsync();
-            //var content = response.Result.ToString();
             var content = response.Content.ReadAsStringAsync().Result;
             return JsonSerializer.Deserialize<TokenResponse>(content);
         }
@@ -718,6 +712,8 @@ namespace DnsServerCore
             _webService.MapGetAndPost("/api/admin/permissions/list", _authApi.ListPermissions);
             _webService.MapGetAndPost("/api/admin/permissions/get", delegate (HttpContext context) { _authApi.GetPermissionDetails(context, PermissionSection.Unknown); });
             _webService.MapGetAndPost("/api/admin/permissions/set", delegate (HttpContext context) { _authApi.SetPermissionsDetails(context, PermissionSection.Unknown); });
+            _webService.MapGetAndPost("/api/admin/oidc/get", _authApi.GetOIDCDetails);
+            _webService.MapGetAndPost("/api/admin/oidc/set", _authApi.SetOIDCDetails);
 
             //logs
             _webService.MapGetAndPost("/api/logs/list", _logsApi.ListLogs);

@@ -2627,6 +2627,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                                         <li id="adminTabListUsers" role="presentation"><a href="#adminTabPaneUsers" aria-controls="adminTabPaneUsers" role="tab" data-toggle="tab" onclick="refreshAdminUsers();">Users</a></li>
                                         <li id="adminTabListGroups" role="presentation"><a href="#adminTabPaneGroups" aria-controls="adminTabPaneGroups" role="tab" data-toggle="tab" onclick="refreshAdminGroups();">Groups</a></li>
                                         <li id="adminTabListPermissions" role="presentation"><a href="#adminTabPanePermissions" aria-controls="adminTabPanePermissions" role="tab" data-toggle="tab" onclick="refreshAdminPermissions();">Permissions</a></li>
+                                        <li id="adminTabListOIDC" role="presentation"><a href="#adminTabPaneOIDC" aria-controls="adminTabPaneOIDC" role="tab" data-toggle="tab" onclick="refreshAdminOIDC();">OIDC Settings</a></li>
                                     </ul>
 
                                     <div class="tab-content">
@@ -2737,6 +2738,36 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                                                         <tr><th colspan="4" id="tfootAdminPermissions"></th></tr>
                                                     </tfoot>
                                                 </table>
+                                            </div>
+                                        </div>
+
+                                        <div id="adminTabPaneOIDC" class="tab-pane">
+                                            <div id="divAdminOIDCLoader" style="margin-top: 10px; height: 350px;"></div>
+
+                                            <div id="divAdminOIDCView" style="margin-top: 10px;">
+
+                                                <div style="clear: both;"></div>
+
+                                                <div>
+                                                    <label for="inputAdminOIDCClient">Client Name:</label>
+                                                    <input type="text" id="inputAdminOIDCClient" placeholder="Enter your OIDC Client Name" />
+                                                </div>
+                                                <div>
+                                                    <label for="inputAdminOIDCClient">Token URL:</label>
+                                                    <input type="text" id="inputAdminOIDCToken" placeholder="Enter your OIDC Token URL" />
+                                                </div>
+                                                <div>
+                                                    <label for="inputAdminOIDCClient">Auth URL:</label>
+                                                    <input type="text" id="inputAdminOIDCAuth" placeholder="Enter your OIDC Auth URL" />
+                                                </div>
+                                                <div>
+                                                    <label for="inputAdminOIDCSecret">Client Secret:</label>
+                                                    <input type="text" id="inputAdminOIDCClient" placeholder="Enter your OIDC Client Secret" />
+                                                </div>
+                                                <div style="float: left; padding: 2px 0px;">
+                                                    <button type="button" class="btn btn-primary" style="padding: 2px 0px; width: 100px;" onclick="saveOIDCDetails();">Save Settings</button>
+                                                </div>
+
                                             </div>
                                         </div>
 

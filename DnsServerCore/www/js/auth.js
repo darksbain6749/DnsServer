@@ -231,8 +231,8 @@ function login(username, password) {
     });
 }
 function loginOIDC() {
-    window.location.href = "Your client" +
-        "client_id=Your client" +
+    window.location.href = "https://daedalus.darksbain.carpanet/realms/carpanet/protocol/openid-connect/auth?" +
+        "client_id=technitium-dns-np" +
         "&response_type=code" +
         "&scope=openid" +
         "&redirect_uri=" + encodeURIComponent(window.location.origin + "/api/auth/callback");
@@ -1556,6 +1556,86 @@ function refreshAdminPermissions() {
             showPageLogin();
         },
         objLoaderPlaceholder: divAdminPermissionsLoader
+    });
+}
+
+function refreshAdminOIDC() {
+    var divAdminOIDCLoader = $("#divAdminOIDCLoader");
+    var divAdminOIDCView = $("#divAdminOIDCView");
+
+    divAdminOIDCLoader.show();
+    divAdminOIDCView.hide();
+
+    HTTPRequest({
+        url: "api/admin/oidc/list?token=" + sessionData.token,
+        success: function (responseJSON) {
+          
+
+
+            divAdminOIDCLoader.hide();
+            divAdminOIDCView.show();
+        },
+        invalidToken: function () {
+            showPageLogin();
+        },
+        objLoaderPlaceholder: divAdminOIDCLoader
+    });
+}
+
+function saveOIDCDetails(objBtn) {
+    var btn = $(objBtn);
+    var divUserDetailsAlert = $("#divUserDetailsAlert");
+
+    var id = btn.attr("data-id");
+    var username = btn.attr("data-username");
+
+    var newUsername = $("#txtUserDetailsUsername").val();
+
+    var displayName = $("#txtUserDetailsDisplayName").val();
+    if (displayName === "")
+        displayName = newUsername;
+
+    var disabled = $("#chkUserDetailsDisableAccount").prop("checked");
+
+    var sessionTimeoutSeconds = $("#txtUserDetailsSessionTimeout").val();
+    if (sessionTimeoutSeconds === "")
+        sessionTimeoutSeconds = 1800;
+
+    var memberOfGroups = cleanTextList($("#txtUserDetailsMemberOf").val());
+
+    var apiUrl = "api/admin/users/set?token=" + sessionData.token + "&user=" + encodeURIComponent(username) + "&displayName=" + encodeURIComponent(displayName) + "&disabled=" + disabled + "&sessionTimeoutSeconds=" + encodeURIComponent(sessionTimeoutSeconds) + "&memberOfGroups=" + encodeURIComponent(memberOfGroups);
+
+    if (newUsername !== username)
+        apiUrl += "&newUser=" + encodeURIComponent(newUsername);
+
+    btn.button('loading');
+
+    HTTPRequest({
+        url: apiUrl,
+        success: function (responseJSON) {
+            if (sessionData.username === username) {
+                sessionData.displayName = responseJSON.response.displayName;
+                sessionData.username = responseJSON.response.username;
+                $("#mnuUserDisplayName").text(sessionData.displayName);
+            }
+
+            var tableHtmlRow = getAdminUsersRowHtml(id, responseJSON.response);
+            $("#trAdminUsers" + id).replaceWith(tableHtmlRow);
+
+            btn.button('reset');
+            $("#modalUserDetails").modal("hide");
+
+            showAlert("success", "User Saved!", "User details were saved successfully.");
+        },
+        error: function () {
+            btn.button('reset');
+        },
+        invalidToken: function () {
+            btn.button('reset');
+            $("#modalUserDetails").modal("hide");
+            showPageLogin();
+        },
+        objAlertPlaceholder: divUserDetailsAlert
     });
 }
 
