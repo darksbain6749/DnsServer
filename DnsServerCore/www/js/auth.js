@@ -231,11 +231,26 @@ function login(username, password) {
     });
 }
 function loginOIDC() {
-    window.location.href = "https://daedalus.darksbain.carpanet/realms/carpanet/protocol/openid-connect/auth?" +
-        "client_id=technitium-dns-np" +
-        "&response_type=code" +
-        "&scope=openid" +
-        "&redirect_uri=" + encodeURIComponent(window.location.origin + "/api/auth/callback");
+    HTTPRequest({
+        url: "api/auth/oidcURL",
+        success: function (responseJSON) {
+            //window.location.href = "https://daedalus.darksbain.carpanet/realms/carpanet/protocol/openid-connect/logout";
+            window.location.href = responseJSON.response.oidc.AuthURL + "?" +
+                "client_id=" + responseJSON.response.oidc.Client +
+                "&response_type=code" +
+                "&scope=openid" +
+                "&redirect_uri=" + encodeURIComponent(window.location.origin + "/api/auth/callback");
+        },
+        error: function () {
+            sessionData = null;
+            showPageLogin();
+        }
+    });
+    //window.location.href = "https://daedalus.darksbain.carpanet/realms/carpanet/protocol/openid-connect/auth?" +
+    //    "client_id=technitium-dns-np" +
+    //    "&response_type=code" +
+    //    "&scope=openid" +
+    //    "&redirect_uri=" + encodeURIComponent(window.location.origin + "/api/auth/callback");
 }
 
 function oidcCallback() {
@@ -253,7 +268,7 @@ function oidcCallback() {
         $("#txtAddEditRecordTtl").attr("placeholder", sessionData.get("defaultRecordTtl"));
 
         // This removes the #... part from the address bar without reloading the page
-        window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+        //window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
         showPageMain();
 
     }
@@ -263,7 +278,7 @@ function logout() {
         url: "api/user/logout?token=" + sessionData.token,
         success: function (responseJSON) {
             sessionData = null;
-            window.location.href = "https://daedalus.darksbain.carpanet/realms/carpanet/protocol/openid-connect/logout";
+            //window.location.href = "https://daedalus.darksbain.carpanet/realms/carpanet/protocol/openid-connect/logout";
             showPageLogin();
         },
         error: function () {
@@ -1559,6 +1574,7 @@ function refreshAdminPermissions() {
     });
 }
 
+//Pull OIDC info
 function refreshAdminOIDC() {
     var divAdminOIDCLoader = $("#divAdminOIDCLoader");
     var divAdminOIDCView = $("#divAdminOIDCView");
@@ -1586,27 +1602,15 @@ function saveOIDCDetails(objBtn) {
     var btn = $(objBtn);
     var divUserDetailsAlert = $("#divUserDetailsAlert");
 
+    var client = $("#txtAdminOIDCClient").val();
+    var tokenURL = $("#txtAdminOIDCToken").val();
+    var authURL = $("#txtAdminOIDCAuth").val();
+    var cSecret = $("#txtAdminOIDCSecret").val();
+
     var id = btn.attr("data-id");
-    var username = btn.attr("data-username");
+    var username = btn.attr("data-username");    
 
-    var newUsername = $("#txtUserDetailsUsername").val();
-
-    var displayName = $("#txtUserDetailsDisplayName").val();
-    if (displayName === "")
-        displayName = newUsername;
-
-    var disabled = $("#chkUserDetailsDisableAccount").prop("checked");
-
-    var sessionTimeoutSeconds = $("#txtUserDetailsSessionTimeout").val();
-    if (sessionTimeoutSeconds === "")
-        sessionTimeoutSeconds = 1800;
-
-    var memberOfGroups = cleanTextList($("#txtUserDetailsMemberOf").val());
-
-    var apiUrl = "api/admin/users/set?token=" + sessionData.token + "&user=" + encodeURIComponent(username) + "&displayName=" + encodeURIComponent(displayName) + "&disabled=" + disabled + "&sessionTimeoutSeconds=" + encodeURIComponent(sessionTimeoutSeconds) + "&memberOfGroups=" + encodeURIComponent(memberOfGroups);
-
-    if (newUsername !== username)
-        apiUrl += "&newUser=" + encodeURIComponent(newUsername);
+    var apiUrl = "api/admin/oidc/set?token=" + sessionData.token + "&client=" + encodeURIComponent(client) + "&tokenurl=" + encodeURIComponent(tokenURL) + "&authurl=" + encodeURIComponent(authURL) + "&secret=" + encodeURIComponent(cSecret);
 
     btn.button('loading');
 
@@ -1618,9 +1622,6 @@ function saveOIDCDetails(objBtn) {
                 sessionData.username = responseJSON.response.username;
                 $("#mnuUserDisplayName").text(sessionData.displayName);
             }
-
-            var tableHtmlRow = getAdminUsersRowHtml(id, responseJSON.response);
-            $("#trAdminUsers" + id).replaceWith(tableHtmlRow);
 
             btn.button('reset');
             $("#modalUserDetails").modal("hide");
@@ -1805,6 +1806,7 @@ function saveSectionPermissions(objBtn) {
             $("#trAdminPermissions" + id).replaceWith(tableHtmlRow);
 
             btn.button('reset');
+            $("#modalEditPermissions").modal("hide");
             $("#modalEditPermissions").modal("hide");
 
             showAlert("success", "Permissions Saved!", "Section permissions were saved successfully.");

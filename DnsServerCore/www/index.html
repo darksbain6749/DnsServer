@@ -78,7 +78,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                     </div>
                     <div class="panel-body">
                         <form class="form-horizontal">
-                            <button id="btnLogin" type="submit" class="btn btn-primary" data-loading-text="Working..." onclick="loginOIDC(); return false;">OIDC Login</button>
+                            <button id="btnOIDCLogin" type="submit" class="btn btn-primary" data-loading-text="Working..." onclick="loginOIDC(); return false;">OIDC Login</button>
 
                             <div class="form-group">
                                 <label for="txtUser" class="col-sm-3 control-label">Username</label>
@@ -2749,20 +2749,20 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                                                 <div style="clear: both;"></div>
 
                                                 <div>
-                                                    <label for="inputAdminOIDCClient">Client Name:</label>
-                                                    <input type="text" id="inputAdminOIDCClient" placeholder="Enter your OIDC Client Name" />
+                                                    <label for="txtAdminOIDCClient">Client Name:</label>
+                                                    <input type="text" id="txtAdminOIDCClient" placeholder="Enter your OIDC Client Name" />
                                                 </div>
                                                 <div>
-                                                    <label for="inputAdminOIDCClient">Token URL:</label>
-                                                    <input type="text" id="inputAdminOIDCToken" placeholder="Enter your OIDC Token URL" />
+                                                    <label for="txtAdminOIDCToken">Token URL:</label>
+                                                    <input type="text" id="txtAdminOIDCToken" placeholder="Enter your OIDC Token URL" />
                                                 </div>
                                                 <div>
-                                                    <label for="inputAdminOIDCClient">Auth URL:</label>
-                                                    <input type="text" id="inputAdminOIDCAuth" placeholder="Enter your OIDC Auth URL" />
+                                                    <label for="txtAdminOIDCClient">Auth URL:</label>
+                                                    <input type="text" id="txtAdminOIDCAuth" placeholder="Enter your OIDC Auth URL" />
                                                 </div>
                                                 <div>
-                                                    <label for="inputAdminOIDCSecret">Client Secret:</label>
-                                                    <input type="text" id="inputAdminOIDCClient" placeholder="Enter your OIDC Client Secret" />
+                                                    <label for="txtAdminOIDCSecret">Client Secret:</label>
+                                                    <input type="text" id="txtAdminOIDCSecret" placeholder="Enter your OIDC Client Secret" />
                                                 </div>
                                                 <div style="float: left; padding: 2px 0px;">
                                                     <button type="button" class="btn btn-primary" style="padding: 2px 0px; width: 100px;" onclick="saveOIDCDetails();">Save Settings</button>

@@ -22,8 +22,10 @@ using Microsoft.AspNetCore.Http;
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading.Tasks;
+using static System.Collections.Specialized.BitVector32;
 
 namespace DnsServerCore
 {
@@ -1031,6 +1033,97 @@ namespace DnsServerCore
 
                 Utf8JsonWriter jsonWriter = context.GetCurrentJsonWriter();
                 WritePermissionDetails(jsonWriter, permission, strSubItem, false);
+            }
+            public void GetOIDCDetails(HttpContext context)
+            {
+                UserSession session = context.GetCurrentSession();
+
+                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.Administration, session.User, PermissionFlag.View))
+                    throw new DnsWebServiceException("Access was denied.");
+
+                HttpRequest request = context.Request;
+                OIDC oidc = _dnsWebService._authManager.GetSingleOIDC();
+                Utf8JsonWriter jsonWriter = context.GetCurrentJsonWriter();
+                jsonWriter.WritePropertyName("oidc");
+                //jsonWriter.WriteStartArray();
+                if (oidc != null)
+                {
+                    var details = oidc.getOIDC();
+                    jsonWriter.WriteStartObject();
+
+                    jsonWriter.WriteString("Client", oidc.Client);
+                    jsonWriter.WriteString("TokenURL", oidc.TokenURL);
+                    jsonWriter.WriteString("AuthURL", oidc.AuthURL);
+                    jsonWriter.WriteString("Secret", "Secret Set");
+
+                    jsonWriter.WriteEndObject();
+                }
+                else
+                {
+                    jsonWriter.WriteStartObject();
+
+                    jsonWriter.WriteString("Client", "");
+                    jsonWriter.WriteString("TokenURL", "");
+                    jsonWriter.WriteString("AuthURL", "");
+                    jsonWriter.WriteString("Secret", "");
+
+                    jsonWriter.WriteEndObject();
+                }
+
+
+                
+            }
+            public void GetOIDCPublicDetails(HttpContext context)
+            {
+                HttpRequest request = context.Request;
+                OIDC oidc = _dnsWebService._authManager.GetSingleOIDC();
+                Utf8JsonWriter jsonWriter = context.GetCurrentJsonWriter();
+                jsonWriter.WritePropertyName("oidc");
+                //jsonWriter.WriteStartArray();
+                if (oidc != null)
+                {
+                    var details = oidc.getOIDC();
+                    jsonWriter.WriteStartObject();
+
+                    jsonWriter.WriteString("Client", oidc.Client);
+                    jsonWriter.WriteString("AuthURL", oidc.AuthURL);
+
+                    jsonWriter.WriteEndObject();
+                }
+                else
+                {
+                    jsonWriter.WriteStartObject();
+
+                    jsonWriter.WriteString("Client", "Not Set");
+
+                    jsonWriter.WriteEndObject();
+                }
+            }
+            public void SetOIDCDetails(HttpContext context)
+            {
+                UserSession session = context.GetCurrentSession();
+
+                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.Administration, session.User, PermissionFlag.Modify))
+                    throw new DnsWebServiceException("Access was denied.");
+
+                HttpRequest request = context.Request;
+
+                string client = request.GetQueryOrForm("client");
+                string tokenURL = request.GetQueryOrForm("tokenurl");
+                string authUrl = request.GetQueryOrForm("authurl");
+                string cSecret = request.GetQueryOrForm("secret");
+
+                _dnsWebService._authManager.CreateOIDC(client, tokenURL, authUrl, cSecret);
+                _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + session.User.Username + "] OIDC Config Set");
+
+                _dnsWebService._authManager.SaveConfigFile();
+
+                Utf8JsonWriter jsonWriter = context.GetCurrentJsonWriter();
+                jsonWriter.WritePropertyName("oidc");
+                jsonWriter.WriteStartObject();
+                jsonWriter.WriteBoolean("success", true);
+                jsonWriter.WriteString("message", $"{client} saved");
+                jsonWriter.WriteEndObject();
             }
 
             #endregion

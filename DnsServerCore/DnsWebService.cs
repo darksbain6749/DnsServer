@@ -483,18 +483,20 @@ namespace DnsServerCore
         }
 
 
-        private TokenResponse? ExchangeCodeForTokens(string code)
+        private TokenResponse ExchangeCodeForTokens(string code)
         {
-            var client = new HttpClient();
-            var tokenEndpoint = "https://daedalus.darksbain.carpanet/realms/carpanet/protocol/openid-connect/token";
+            HttpClient client = new HttpClient();
+            OIDC oidc = _authManager.GetSingleOIDC();
+            OIDC oidcDetails = oidc.getOIDC();
 
-            var parameters = new Dictionary<string, string>
+            string tokenEndpoint = oidcDetails.TokenURL;
+            Dictionary<string, string> parameters = new Dictionary<string, string>
     {
         { "grant_type", "authorization_code" },
         { "code", code },
         { "redirect_uri", "http://" + _dnsServer.ServerDomain + ":5380/api/auth/callback" },
-        { "client_id", "technitium-dns-np" },
-        { "client_secret", "pSFAbyJZeaUBLkpLdgwFfrEkF7A9rTBv" }
+        { "client_id", oidcDetails.Client },
+        { "client_secret", oidcDetails.decryptSecret(oidcDetails.Secret) }
     };
 
             var response = client.PostAsync(tokenEndpoint, new FormUrlEncodedContent(parameters)).Result;
@@ -506,7 +508,7 @@ namespace DnsServerCore
         }
 
 
-        private UserInfo? ParseIdToken(string idToken)
+        private UserInfo ParseIdToken(string idToken)
         {
             var handler = new JwtSecurityTokenHandler();
             var jwt = handler.ReadJwtToken(idToken);
@@ -540,7 +542,8 @@ namespace DnsServerCore
 
             //user auth
 
-            _ = _webService.MapGetAndPost("/api/auth/callback", delegate (HttpContext context)
+            _webService.MapGetAndPost("/api/auth/oidcURL",_authApi.GetOIDCPublicDetails);
+            _webService.MapGetAndPost("/api/auth/callback", delegate (HttpContext context)
             {
                 var code = context.Request.Query["code"];
                 if (string.IsNullOrEmpty(code))
@@ -581,8 +584,6 @@ namespace DnsServerCore
                 return Results.Redirect($"/#token={token}&displayName={displayName}&version={version}&" +
                     $"dnsServerDomain={dnsServerDomain}&defaultRecordTtl={defaultRecordTtl}&uptimestamp={uptime}&oidcReturn=true");
             });
-
-
 
             _webService.MapGetAndPost("/api/user/login", delegate (HttpContext context) { return _authApi.LoginAsync(context, UserSessionType.Standard); });
             _webService.MapGetAndPost("/api/user/createToken", delegate (HttpContext context) { return _authApi.LoginAsync(context, UserSessionType.ApiToken); });
@@ -712,7 +713,7 @@ namespace DnsServerCore
             _webService.MapGetAndPost("/api/admin/permissions/list", _authApi.ListPermissions);
             _webService.MapGetAndPost("/api/admin/permissions/get", delegate (HttpContext context) { _authApi.GetPermissionDetails(context, PermissionSection.Unknown); });
             _webService.MapGetAndPost("/api/admin/permissions/set", delegate (HttpContext context) { _authApi.SetPermissionsDetails(context, PermissionSection.Unknown); });
-            _webService.MapGetAndPost("/api/admin/oidc/get", _authApi.GetOIDCDetails);
+            _webService.MapGetAndPost("/api/admin/oidc/list", _authApi.GetOIDCDetails);
             _webService.MapGetAndPost("/api/admin/oidc/set", _authApi.SetOIDCDetails);
 
             //logs
@@ -739,6 +740,7 @@ namespace DnsServerCore
 
             switch (context.Request.Path)
             {
+                case "/api/auth/oidcURL":
                 case "/api/auth/callback": //Leave callback out of needing token
                 case "/api/user/login":
                 case "/api/user/createToken":
@@ -801,7 +803,7 @@ namespace DnsServerCore
 
                 jsonWriter.WriteStartObject();
 
-                if (needsJsonResponseObject)
+                if (needsJsonResponseObject || context.Request.Path == "/api/auth/oidcURL")
                 {
                     jsonWriter.WritePropertyName("response");
                     jsonWriter.WriteStartObject();
@@ -814,7 +816,7 @@ namespace DnsServerCore
                 {
                     await next(context);
                 }
-                if (context.Request.Path != "/return" && context.Request.Path != "/api/auth/callback")
+                if (context.Request.Path != "/api/auth/callback")
                 {
                     jsonWriter.WriteString("status", "ok");
 

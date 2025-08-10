@@ -36,6 +36,7 @@ namespace DnsServerCore.Auth
 
         readonly ConcurrentDictionary<string, Group> _groups = new ConcurrentDictionary<string, Group>(1, 4);
         readonly ConcurrentDictionary<string, User> _users = new ConcurrentDictionary<string, User>(1, 4);
+        readonly ConcurrentDictionary<string, OIDC> _OIDC = new ConcurrentDictionary<string, OIDC>(1, 1);
 
         readonly ConcurrentDictionary<PermissionSection, Permission> _permissions = new ConcurrentDictionary<PermissionSection, Permission>(1, 11);
 
@@ -357,6 +358,19 @@ namespace DnsServerCore.Auth
                                 _sessions.TryAdd(session.Token, session);
                         }
                     }
+
+                    {
+                        if (bR.BaseStream.Length - bR.BaseStream.Position >= sizeof(int))
+                        {
+                            //throw new InvalidDataException("Unexpected end of stream when reading OIDC count.");
+                            int count = bR.ReadInt32();
+                            for (int i = 0; i < count; i++)
+                            {
+                                OIDC oidc = new OIDC(bR, this);
+                                _OIDC.TryAdd(oidc.Client, oidc);
+                            }
+                        }
+                    }
                     break;
 
                 default:
@@ -398,6 +412,11 @@ namespace DnsServerCore.Auth
 
             foreach (UserSession session in activeSessions)
                 session.WriteTo(bW);
+
+            bW.Write(Convert.ToByte(_OIDC.Count));
+
+            foreach (KeyValuePair<string, OIDC> oidc in _OIDC)
+                oidc.Value.WriteTo(bW);
         }
 
         private static IPAddress GetClientNetwork(IPAddress address)
@@ -697,7 +716,7 @@ namespace DnsServerCore.Auth
             return session;
         }
 
-        public async Task<UserSession> CreateSessionAsyncOIDC(UserSessionType type, string tokenName, string username, IPAddress remoteAddress, string userAgent)
+        public Task<UserSession> CreateSessionAsyncOIDC(UserSessionType type, string tokenName, string username, IPAddress remoteAddress, string userAgent)
         {
             IPAddress network = GetClientNetwork(remoteAddress);
 
@@ -724,7 +743,7 @@ namespace DnsServerCore.Auth
 
             user.LoggedInFrom(remoteAddress);
 
-            return session;
+            return Task.FromResult(session);
         }
 
         public UserSession CreateApiToken(string tokenName, string username, IPAddress remoteAddress, string userAgent)
@@ -834,6 +853,31 @@ namespace DnsServerCore.Auth
         {
             return _permissions.TryGetValue(section, out Permission permission) && permission.RemoveAllSubItemPermissions(subItemName);
         }
+        public OIDC GetSingleOIDC()
+        {
+            if (_OIDC.Count == 1)
+            {
+                // Return the single OIDC value
+                foreach (var kvp in _OIDC)
+                    return kvp.Value;
+            }
+
+            // If dictionary is empty or has more than one, handle accordingly
+            return null; // or throw exception if you want
+        }
+
+        public OIDC CreateOIDC(string client, string tokenUrl, string authUrl, string secret)
+        {
+            if (_OIDC.Count > 1)
+                throw new DnsWebServiceException("Only one OIDC config allowed");
+
+
+            OIDC oIDC = new OIDC(client, tokenUrl, authUrl, secret);
+
+            _OIDC.TryAdd(client, oIDC);
+            return oIDC;
+       
+        }
 
         public bool IsPermitted(PermissionSection section, User user, PermissionFlag flag)
         {
@@ -904,6 +948,9 @@ namespace DnsServerCore.Auth
 
         public ICollection<UserSession> Sessions
         { get { return _sessions.Values; } }
+
+        public ICollection<OIDC> OIDC
+        { get { return _OIDC.Values; } }
 
         #endregion
     }
