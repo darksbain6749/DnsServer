@@ -27,6 +27,7 @@ using System.Net.Sockets;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using TechnitiumLibrary.Net;
@@ -312,52 +313,78 @@ namespace DnsServerCore.Auth
                     mS.CopyTo(fS);
                 }
             }
-
+            SaveOIDCConfig();
             _log.Write("DNS Server auth config file was saved: " + configFile);
         }
-        private void SaveOIDCConfig(string password)
+        private void SaveOIDCConfig()
         {
-
             string baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             string configFile = Path.Combine(baseDir, "config/oidc.config");
             string jsonConfig = null;
+            string password = null;
 
-            foreach (KeyValuePair < string, OIDC> oidc in _OIDC)
+            foreach (KeyValuePair<string, OIDC> oidc in _OIDC)
             {
-                jsonConfig = "{client:" + oidc.Value.Client;
-
+                jsonConfig = JsonSerializer.Serialize(oidc.Value);
+                password = "RkSAA%?/MvO}@L1=";
             }
+            try
+            {
+                byte[] salt = RandomNumberGenerator.GetBytes(16);
+                var key = new Rfc2898DeriveBytes(password, salt, 100_000, HashAlgorithmName.SHA256);
 
-            byte[] salt = RandomNumberGenerator.GetBytes(16);
+                using var aes = Aes.Create();
+                aes.Key = key.GetBytes(32);
+                aes.GenerateIV();
+
+                using var fs = new FileStream(configFile, FileMode.Create, FileAccess.Write);
+                fs.Write(salt, 0, salt.Length);
+                fs.Write(aes.IV, 0, aes.IV.Length);
+
+                using var cs = new CryptoStream(fs, aes.CreateEncryptor(), CryptoStreamMode.Write);
+                using var sw = new StreamWriter(cs);
+                sw.Write(jsonConfig);
+
+                using (MemoryStream mS = new MemoryStream())
+                {
+                    //serialize config
+                    WriteConfigTo(new BinaryWriter(mS));
+
+                    //write config
+                    mS.Position = 0;
+
+                    using (FileStream fS = new FileStream(configFile, FileMode.Create, FileAccess.Write))
+                    {
+                        mS.CopyTo(fS);
+                    }
+                }
+                _log.Write("DNS Server OIDC config file was saved: " + configFile);
+            }
+            catch { 
+                _log.Write("Error saving OIDC config file: " + configFile);
+            }
+        }
+        private void readOIDCConfig()
+        {
+            string baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            string path = Path.Combine(baseDir, "config/oidc.config");
+            string password = "RkSAA%?/MvO}@L1=";
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read);
+            byte[] salt = new byte[16];
+            fs.Read(salt, 0, salt.Length);
+
+            byte[] iv = new byte[16];
+            fs.Read(iv, 0, iv.Length);
+
             var key = new Rfc2898DeriveBytes(password, salt, 100_000, HashAlgorithmName.SHA256);
 
             using var aes = Aes.Create();
             aes.Key = key.GetBytes(32);
-            aes.GenerateIV();
+            aes.IV = iv;
 
-            using var fs = new FileStream(configFile, FileMode.Create, FileAccess.Write);
-            fs.Write(salt, 0, salt.Length);
-            fs.Write(aes.IV, 0, aes.IV.Length);
-
-            using var cs = new CryptoStream(fs, aes.CreateEncryptor(), CryptoStreamMode.Write);
-            using var sw = new StreamWriter(cs);
-            sw.Write(jsonConfig);
-
-            using (MemoryStream mS = new MemoryStream())
-            {
-                //serialize config
-                WriteConfigTo(new BinaryWriter(mS));
-
-                //write config
-                mS.Position = 0;
-
-                using (FileStream fS = new FileStream(configFile, FileMode.Create, FileAccess.Write))
-                {
-                    mS.CopyTo(fS);
-                }
-            }
-
-            _log.Write("DNS Server OIDC config file was saved: " + configFile);
+            using var cs = new CryptoStream(fs, aes.CreateDecryptor(), CryptoStreamMode.Read);
+            using var sr = new StreamReader(cs);
+            return sr.ReadToEnd();
         }
         private void ReadConfigFrom(BinaryReader bR)
         {

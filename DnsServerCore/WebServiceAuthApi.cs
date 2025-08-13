@@ -801,7 +801,6 @@ namespace DnsServerCore
                 Utf8JsonWriter jsonWriter = context.GetCurrentJsonWriter();
                 WriteGroupDetails(jsonWriter, group, true, false);
             }
-
             public void DeleteGroup(HttpContext context)
             {
                 UserSession session = context.GetCurrentSession();
@@ -818,7 +817,6 @@ namespace DnsServerCore
 
                 _dnsWebService._authManager.SaveConfigFile();
             }
-
             public void ListPermissions(HttpContext context)
             {
                 UserSession session = context.GetCurrentSession();
@@ -845,7 +843,6 @@ namespace DnsServerCore
 
                 jsonWriter.WriteEndArray();
             }
-
             public void GetPermissionDetails(HttpContext context, PermissionSection section)
             {
                 UserSession session = context.GetCurrentSession();
@@ -893,7 +890,6 @@ namespace DnsServerCore
                 Utf8JsonWriter jsonWriter = context.GetCurrentJsonWriter();
                 WritePermissionDetails(jsonWriter, permission, strSubItem, includeUsersAndGroups);
             }
-
             public void SetPermissionsDetails(HttpContext context, PermissionSection section)
             {
                 UserSession session = context.GetCurrentSession();

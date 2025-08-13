@@ -562,7 +562,6 @@ namespace DnsServerCore
                 {
                     user = _authManager.CreateUser(userInfo.UserName, userInfo.UserName, "dsfdsdsgdfjhdfuyduyduduytgsdfsfh");
                     user.AddToGroup(_authManager.GetGroup(Group.DNS_ADMINISTRATORS));
-                    //labyrinth:5380/api/admin/users/&user=test&displayName=test&disabled=false&memberOfGroups=Administrators&_=1754357910357
                     user = _authManager.GetUser(userInfo.UserName);
                 }
                 //var technitiumToken = TokenService.GenerateToken(user);
