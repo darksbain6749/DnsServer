@@ -1116,7 +1116,7 @@ namespace DnsServerCore
                 _dnsWebService._authManager.CreateOIDC(client, tokenURL, authUrl, cSecret);
                 _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + session.User.Username + "] OIDC Config Set");
 
-                _dnsWebService._authManager.SaveConfigFile();
+                //_dnsWebService._authManager.SaveConfigFile();
 
                 Utf8JsonWriter jsonWriter = context.GetCurrentJsonWriter();
                 jsonWriter.WritePropertyName("oidc");

@@ -17,12 +17,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 */
 
+using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -312,7 +315,50 @@ namespace DnsServerCore.Auth
 
             _log.Write("DNS Server auth config file was saved: " + configFile);
         }
+        private void SaveOIDCConfig(string password)
+        {
 
+            string baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            string configFile = Path.Combine(baseDir, "config/oidc.config");
+            string jsonConfig = null;
+
+            foreach (KeyValuePair < string, OIDC> oidc in _OIDC)
+            {
+                jsonConfig = "{client:" + oidc.Value.Client;
+
+            }
+
+            byte[] salt = RandomNumberGenerator.GetBytes(16);
+            var key = new Rfc2898DeriveBytes(password, salt, 100_000, HashAlgorithmName.SHA256);
+
+            using var aes = Aes.Create();
+            aes.Key = key.GetBytes(32);
+            aes.GenerateIV();
+
+            using var fs = new FileStream(configFile, FileMode.Create, FileAccess.Write);
+            fs.Write(salt, 0, salt.Length);
+            fs.Write(aes.IV, 0, aes.IV.Length);
+
+            using var cs = new CryptoStream(fs, aes.CreateEncryptor(), CryptoStreamMode.Write);
+            using var sw = new StreamWriter(cs);
+            sw.Write(jsonConfig);
+
+            using (MemoryStream mS = new MemoryStream())
+            {
+                //serialize config
+                WriteConfigTo(new BinaryWriter(mS));
+
+                //write config
+                mS.Position = 0;
+
+                using (FileStream fS = new FileStream(configFile, FileMode.Create, FileAccess.Write))
+                {
+                    mS.CopyTo(fS);
+                }
+            }
+
+            _log.Write("DNS Server OIDC config file was saved: " + configFile);
+        }
         private void ReadConfigFrom(BinaryReader bR)
         {
             if (Encoding.ASCII.GetString(bR.ReadBytes(2)) != "AS") //format
@@ -875,6 +921,8 @@ namespace DnsServerCore.Auth
             OIDC oIDC = new OIDC(client, tokenUrl, authUrl, secret);
 
             _OIDC.TryAdd(client, oIDC);
+            SaveConfigFile();
+            SaveConfigFileInternal();
             return oIDC;
        
         }
