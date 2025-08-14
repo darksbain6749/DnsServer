@@ -268,7 +268,7 @@ function oidcCallback() {
         $("#txtAddEditRecordTtl").attr("placeholder", sessionData.get("defaultRecordTtl"));
 
         // This removes the #... part from the address bar without reloading the page
-        //window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+        window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
         showPageMain();
 
     }
@@ -1585,7 +1585,10 @@ function refreshAdminOIDC() {
     HTTPRequest({
         url: "api/admin/oidc/list?token=" + sessionData.token,
         success: function (responseJSON) {
-          
+            $("#txtAdminOIDCClient").val(responseJSON.response.oidc.Client);
+            $("#txtAdminOIDCToken").val(responseJSON.response.oidc.TokenURL);
+            $("#txtAdminOIDCAuth").val(responseJSON.response.oidc.AuthURL);
+            $("#txtAdminOIDCSecret").val(responseJSON.response.oidc.Secret);
 
 
             divAdminOIDCLoader.hide();

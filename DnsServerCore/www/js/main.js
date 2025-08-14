@@ -37,6 +37,7 @@ window.onload = function () {
         }
     });
     oidcCallback();
+    showPageMain();
     window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
 
 };

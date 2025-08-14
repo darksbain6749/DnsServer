@@ -35,6 +35,7 @@ namespace DnsServerCore.Auth
         private readonly IDataProtector _protector;
 
         #region constructor
+        public OIDC() { _protector = CreateProtector(); }
         public OIDC(string client, string tokenURL, string authURL, string secret)
         {
             _protector = CreateProtector();

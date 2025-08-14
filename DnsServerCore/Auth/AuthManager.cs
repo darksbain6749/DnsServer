@@ -226,6 +226,8 @@ namespace DnsServerCore.Auth
                     ReadConfigFrom(new BinaryReader(fS));
                 }
 
+                readOIDCConfig();
+
                 if (implantSession is not null)
                 {
                     using (MemoryStream mS = new MemoryStream())
@@ -294,6 +296,7 @@ namespace DnsServerCore.Auth
                 _log.Write("Note: You may try deleting the auth config file to fix this issue. However, you will lose auth settings but, rest of the DNS settings and zone data wont be affected.");
                 throw;
             }
+            
         }
 
         private void SaveConfigFileInternal()
@@ -313,7 +316,7 @@ namespace DnsServerCore.Auth
                     mS.CopyTo(fS);
                 }
             }
-            SaveOIDCConfig();
+            //SaveOIDCConfig();
             _log.Write("DNS Server auth config file was saved: " + configFile);
         }
         private void SaveOIDCConfig()
@@ -369,22 +372,39 @@ namespace DnsServerCore.Auth
             string baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             string path = Path.Combine(baseDir, "config/oidc.config");
             string password = "RkSAA%?/MvO}@L1=";
-            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read);
-            byte[] salt = new byte[16];
-            fs.Read(salt, 0, salt.Length);
+            try { 
+                if (!File.Exists(path))
+                {
+                    _log.Write("No OIDC config file: " + path);
+                    return;
+                }
+                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read);
+                byte[] salt = new byte[16];
+                fs.Read(salt, 0, salt.Length);
 
-            byte[] iv = new byte[16];
-            fs.Read(iv, 0, iv.Length);
+                byte[] iv = new byte[16];
+                fs.Read(iv, 0, iv.Length);
 
-            var key = new Rfc2898DeriveBytes(password, salt, 100_000, HashAlgorithmName.SHA256);
+                var key = new Rfc2898DeriveBytes(password, salt, 100_000, HashAlgorithmName.SHA256);
 
-            using var aes = Aes.Create();
-            aes.Key = key.GetBytes(32);
-            aes.IV = iv;
+                using var aes = Aes.Create();
+                aes.Key = key.GetBytes(32);
+                aes.IV = iv;
 
-            using var cs = new CryptoStream(fs, aes.CreateDecryptor(), CryptoStreamMode.Read);
-            using var sr = new StreamReader(cs);
-            return sr.ReadToEnd();
+                using var cs = new CryptoStream(fs, aes.CreateDecryptor(), CryptoStreamMode.Read);
+                using var sr = new StreamReader(cs);
+                var contents = sr.ReadToEnd();
+                //var client = contents.Client;
+                OIDC oidc = JsonSerializer.Deserialize<OIDC>(contents);
+                _OIDC.TryAdd(oidc.Client, oidc);
+            }
+            catch (Exception ex)
+            {
+                _log.Write("Error reading OIDC config file: " + ex.Message);
+                return;
+            }
+            
+            //return sr.ReadToEnd();
         }
         private void ReadConfigFrom(BinaryReader bR)
         {
@@ -949,7 +969,8 @@ namespace DnsServerCore.Auth
 
             _OIDC.TryAdd(client, oIDC);
             SaveConfigFile();
-            SaveConfigFileInternal();
+            //SaveConfigFileInternal();
+            SaveOIDCConfig();
             return oIDC;
        
         }
