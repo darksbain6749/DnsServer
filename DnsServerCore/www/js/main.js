@@ -28,8 +28,7 @@ window.onload = function () {
         success: function (responseJSON) {
             if (responseJSON.response.oidc.Client == "Not Set")
                 document.getElementById("btnOIDCLogin").style.display = "none"; 
-            //window.location.href = "https://daedalus.darksbain.carpanet/realms/carpanet/protocol/openid-connect/logout";
-            //showPageLogin();
+
         },
         error: function () {
             sessionData = null;
@@ -37,8 +36,8 @@ window.onload = function () {
         }
     });
     oidcCallback();
-    showPageMain();
-    window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+    //showPageMain();
+    //window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
 
 };
 function showPageLogin() {

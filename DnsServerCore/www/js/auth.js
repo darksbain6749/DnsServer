@@ -246,11 +246,6 @@ function loginOIDC() {
             showPageLogin();
         }
     });
-    //window.location.href = "https://daedalus.darksbain.carpanet/realms/carpanet/protocol/openid-connect/auth?" +
-    //    "client_id=technitium-dns-np" +
-    //    "&response_type=code" +
-    //    "&scope=openid" +
-    //    "&redirect_uri=" + encodeURIComponent(window.location.origin + "/api/auth/callback");
 }
 
 function oidcCallback() {
@@ -1618,7 +1613,7 @@ function saveOIDCDetails(objBtn) {
     btn.button('loading');
 
     HTTPRequest({
-        url: apiUrl,
+        url: apiUrl, method: "POST",
         success: function (responseJSON) {
             if (sessionData.username === username) {
                 sessionData.displayName = responseJSON.response.displayName;
@@ -1629,7 +1624,7 @@ function saveOIDCDetails(objBtn) {
             btn.button('reset');
             $("#modalUserDetails").modal("hide");
 
-            showAlert("success", "User Saved!", "User details were saved successfully.");
+            showAlert("success", "OIDC Saved!", "OIDC details were saved successfully.");
         },
         error: function () {
             btn.button('reset');

@@ -1,0 +1,20 @@
+{
+  "profiles": {
+    "DnsServerApp": {
+      "commandName": "Project",
+      "remoteDebugEnabled": false,
+      "remoteDebugMachine": "raspberrypi:5390",
+      "authenticationMode": "None"
+    },
+    "WSL": {
+      "commandName": "WSL2",
+      "distributionName": ""
+    },
+    "Profile 1": {
+      "commandName": "Project",
+      "remoteDebugEnabled": true,
+      "remoteDebugMachine": "raspberrypi:5390",
+      "authenticationMode": "None"
+    }
+  }
+}
