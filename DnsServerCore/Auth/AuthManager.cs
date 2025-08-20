@@ -201,7 +201,6 @@ namespace DnsServerCore.Auth
 
             adminUser.AddToGroup(adminGroup);
         }
-
         private void LoadConfigFileInternal(UserSession implantSession)
         {
             string configFile = Path.Combine(_configFolder, "auth.config");
@@ -298,7 +297,6 @@ namespace DnsServerCore.Auth
             }
             
         }
-
         private void SaveConfigFileInternal()
         {
             string configFile = Path.Combine(_configFolder, "auth.config");
@@ -316,7 +314,7 @@ namespace DnsServerCore.Auth
                     mS.CopyTo(fS);
                 }
             }
-            //SaveOIDCConfig();
+            SaveOIDCConfig();
             _log.Write("DNS Server auth config file was saved: " + configFile);
         }
         private void SaveOIDCConfig()
@@ -329,7 +327,7 @@ namespace DnsServerCore.Auth
             foreach (KeyValuePair<string, OIDC> oidc in _OIDC)
             {
                 jsonConfig = JsonSerializer.Serialize(oidc.Value);
-                password = "RkSAA%?/MvO}@L1=";
+                password = "Password";
             }
             try
             {
@@ -371,7 +369,7 @@ namespace DnsServerCore.Auth
         {
             string baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             string path = Path.Combine(baseDir, "config/oidc.config");
-            string password = "RkSAA%?/MvO}@L1=";
+            string password = "Password";
             try { 
                 if (!File.Exists(path))
                 {
@@ -470,7 +468,6 @@ namespace DnsServerCore.Auth
                     throw new InvalidDataException("DNS Server auth config version not supported.");
             }
         }
-
         private void WriteConfigTo(BinaryWriter bW)
         {
             bW.Write(Encoding.ASCII.GetBytes("AS")); //format
@@ -511,7 +508,6 @@ namespace DnsServerCore.Auth
             foreach (KeyValuePair<string, OIDC> oidc in _OIDC)
                 oidc.Value.WriteTo(bW);
         }
-
         private static IPAddress GetClientNetwork(IPAddress address)
         {
             switch (address.AddressFamily)
@@ -526,7 +522,6 @@ namespace DnsServerCore.Auth
                     throw new InvalidOperationException();
             }
         }
-
         private void MarkFailedLoginAttempt(IPAddress network)
         {
             _failedLoginAttemptNetworks.AddOrUpdate(network, 1, delegate (IPAddress key, int attempts)
@@ -961,6 +956,7 @@ namespace DnsServerCore.Auth
 
         public OIDC CreateOIDC(string client, string tokenUrl, string authUrl, string secret)
         {
+            _OIDC.Clear();
             if (_OIDC.Count > 1)
                 throw new DnsWebServiceException("Only one OIDC config allowed");
 

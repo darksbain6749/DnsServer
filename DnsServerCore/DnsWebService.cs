@@ -35,6 +35,7 @@ using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging;
+using Org.BouncyCastle.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Formats.Asn1;
@@ -560,7 +561,21 @@ namespace DnsServerCore
                 User user = _authManager.GetUser(userInfo.UserName);
                 if (user == null)
                 {
-                    user = _authManager.CreateUser(userInfo.UserName, userInfo.UserName, "dsfdsdsgdfjhdfuyduyduduytgsdfsfh");
+                    const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+[]{}|;:,.<>?";
+
+                    byte[] bytes = new byte[48];
+                    var result = new StringBuilder(48);
+
+                    using (var rng = RandomNumberGenerator.Create())
+                    {
+                        rng.GetBytes(bytes);
+                    }
+
+                    foreach (byte b in bytes)
+                    {
+                        result.Append(chars[b % chars.Length]);
+                    }
+                    user = _authManager.CreateUser(userInfo.UserName, userInfo.UserName, result.ToString());
                     user.AddToGroup(_authManager.GetGroup(Group.DNS_ADMINISTRATORS));
                     user = _authManager.GetUser(userInfo.UserName);
                 }
@@ -810,6 +825,7 @@ namespace DnsServerCore
                     await next(context);
 
                     jsonWriter.WriteEndObject();
+                    jsonWriter.Flush();
                 }
                 else
                 {
