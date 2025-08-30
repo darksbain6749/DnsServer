@@ -23,18 +23,21 @@ var quickBlockLists = null;
 var quickForwardersList = null;
 
 window.onload = function () {
-    HTTPRequest({
-        url: "api/auth/oidcURL",
-        success: function (responseJSON) {
-            if (responseJSON.response.oidc.Client == "Not Set")
-                document.getElementById("btnOIDCLogin").style.display = "none"; 
+    var sPath = window.location.pathname;
+    var sPage = sPath.substring(sPath.lastIndexOf('/') + 1);
+    if (sPage.includes("login") || sPage == "")
+        HTTPRequest({
+            url: "api/auth/oidcURL",
+            success: function (responseJSON) {
+                if (responseJSON.response.oidc.Client == "Not Set")
+                    document.getElementById("btnOIDCLogin").style.display = "none";
 
-        },
-        error: function () {
-            sessionData = null;
-            showPageLogin();
-        }
-    });
+            },
+            error: function () {
+                sessionData = null;
+                showPageLogin();
+            }
+        });
     oidcCallback();
     //showPageMain();
     //window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
