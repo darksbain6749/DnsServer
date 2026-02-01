@@ -327,7 +327,7 @@ namespace DnsServerCore.Auth
             foreach (KeyValuePair<string, OIDC> oidc in _OIDC)
             {
                 jsonConfig = JsonSerializer.Serialize(oidc.Value);
-                password = "Password";
+                password = "LEkNcYSq8AkQLftku5Q85J0";
             }
             try
             {
@@ -369,7 +369,7 @@ namespace DnsServerCore.Auth
         {
             string baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             string path = Path.Combine(baseDir, "config/oidc.config");
-            string password = "Password";
+            string password = "LEkNcYSq8AkQLftku5Q85J0";
             try { 
                 if (!File.Exists(path))
                 {
