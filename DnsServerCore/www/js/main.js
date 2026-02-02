@@ -31,7 +31,6 @@ window.onload = function () {
             success: function (responseJSON) {
                 if (responseJSON.response.oidc.Client == "Not Set")
                     document.getElementById("btnOIDCLogin").style.display = "none";
-
             },
             error: function () {
                 sessionData = null;
