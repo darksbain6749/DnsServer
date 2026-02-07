@@ -40,7 +40,6 @@ namespace DnsServerCore.Auth
 
         readonly ConcurrentDictionary<string, Group> _groups = new ConcurrentDictionary<string, Group>(1, 4);
         readonly ConcurrentDictionary<string, User> _users = new ConcurrentDictionary<string, User>(1, 4);
-        readonly ConcurrentDictionary<string, OIDC> _OIDC = new ConcurrentDictionary<string, OIDC>(1, 1);
 
         readonly ConcurrentDictionary<PermissionSection, Permission> _permissions = new ConcurrentDictionary<PermissionSection, Permission>(1, 11);
 
@@ -316,93 +315,6 @@ namespace DnsServerCore.Auth
             }
             SaveOIDCConfig();
             _log.Write("DNS Server auth config file was saved: " + configFile);
-        }
-        private void SaveOIDCConfig()
-        {
-            string baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            string configFile = Path.Combine(baseDir, "config/oidc.config");
-            string jsonConfig = null;
-            string password = null;
-
-            foreach (KeyValuePair<string, OIDC> oidc in _OIDC)
-            {
-                jsonConfig = JsonSerializer.Serialize(oidc.Value);
-                password = "LEkNcYSq8AkQLftku5Q85J0";
-            }
-            try
-            {
-                byte[] salt = RandomNumberGenerator.GetBytes(16);
-                var key = new Rfc2898DeriveBytes(password, salt, 100_000, HashAlgorithmName.SHA256);
-
-                using var aes = Aes.Create();
-                aes.Key = key.GetBytes(32);
-                aes.GenerateIV();
-
-                using var fs = new FileStream(configFile, FileMode.Create, FileAccess.Write);
-                fs.Write(salt, 0, salt.Length);
-                fs.Write(aes.IV, 0, aes.IV.Length);
-
-                using var cs = new CryptoStream(fs, aes.CreateEncryptor(), CryptoStreamMode.Write);
-                using var sw = new StreamWriter(cs);
-                sw.Write(jsonConfig);
-
-                using (MemoryStream mS = new MemoryStream())
-                {
-                    //serialize config
-                    WriteConfigTo(new BinaryWriter(mS));
-
-                    //write config
-                    mS.Position = 0;
-
-                    using (FileStream fS = new FileStream(configFile, FileMode.Create, FileAccess.Write))
-                    {
-                        mS.CopyTo(fS);
-                    }
-                }
-                _log.Write("DNS Server OIDC config file was saved: " + configFile);
-            }
-            catch { 
-                _log.Write("Error saving OIDC config file: " + configFile);
-            }
-        }
-        private void readOIDCConfig()
-        {
-            string baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            string path = Path.Combine(baseDir, "config/oidc.config");
-            string password = "LEkNcYSq8AkQLftku5Q85J0";
-            try { 
-                if (!File.Exists(path))
-                {
-                    _log.Write("No OIDC config file: " + path);
-                    return;
-                }
-                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read);
-                byte[] salt = new byte[16];
-                fs.Read(salt, 0, salt.Length);
-
-                byte[] iv = new byte[16];
-                fs.Read(iv, 0, iv.Length);
-
-                var key = new Rfc2898DeriveBytes(password, salt, 100_000, HashAlgorithmName.SHA256);
-
-                using var aes = Aes.Create();
-                aes.Key = key.GetBytes(32);
-                aes.IV = iv;
-
-                using var cs = new CryptoStream(fs, aes.CreateDecryptor(), CryptoStreamMode.Read);
-                using var sr = new StreamReader(cs);
-                var contents = sr.ReadToEnd();
-                //var client = contents.Client;
-                OIDC oidc = JsonSerializer.Deserialize<OIDC>(contents);
-                _OIDC.TryAdd(oidc.Client, oidc);
-            }
-            catch (Exception ex)
-            {
-                _log.Write("Error reading OIDC config file: " + ex.Message);
-                return;
-            }
-            
-            //return sr.ReadToEnd();
         }
         private void ReadConfigFrom(BinaryReader bR)
         {
@@ -941,35 +853,6 @@ namespace DnsServerCore.Auth
         {
             return _permissions.TryGetValue(section, out Permission permission) && permission.RemoveAllSubItemPermissions(subItemName);
         }
-        public OIDC GetSingleOIDC()
-        {
-            if (_OIDC.Count == 1)
-            {
-                // Return the single OIDC value
-                foreach (var kvp in _OIDC)
-                    return kvp.Value;
-            }
-
-            // If dictionary is empty or has more than one, handle accordingly
-            return null; // or throw exception if you want
-        }
-
-        public OIDC CreateOIDC(string client, string tokenUrl, string authUrl, string secret)
-        {
-            _OIDC.Clear();
-            if (_OIDC.Count > 1)
-                throw new DnsWebServiceException("Only one OIDC config allowed");
-
-
-            OIDC oIDC = new OIDC(client, tokenUrl, authUrl, secret);
-
-            _OIDC.TryAdd(client, oIDC);
-            SaveConfigFile();
-            //SaveConfigFileInternal();
-            SaveOIDCConfig();
-            return oIDC;
-       
-        }
 
         public bool IsPermitted(PermissionSection section, User user, PermissionFlag flag)
         {
@@ -1041,9 +924,132 @@ namespace DnsServerCore.Auth
         public ICollection<UserSession> Sessions
         { get { return _sessions.Values; } }
 
+        #endregion
+
+        #region OIDC
+        readonly ConcurrentDictionary<string, OIDC> _OIDC = new ConcurrentDictionary<string, OIDC>(1, 1);
+        private void SaveOIDCConfig()
+        {
+            string baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            string configFile = Path.Combine(baseDir, "config/oidc.config");
+            string jsonConfig = null;
+            string password = null;
+
+            foreach (KeyValuePair<string, OIDC> oidc in _OIDC)
+            {
+                jsonConfig = JsonSerializer.Serialize(oidc.Value);
+                password = "LEkNcYSq8AkQLftku5Q85J0";
+            }
+            try
+            {
+                byte[] salt = RandomNumberGenerator.GetBytes(16);
+                var key = new Rfc2898DeriveBytes(password, salt, 100_000, HashAlgorithmName.SHA256);
+
+                using var aes = Aes.Create();
+                aes.Key = key.GetBytes(32);
+                aes.GenerateIV();
+
+                using var fs = new FileStream(configFile, FileMode.Create, FileAccess.Write);
+                fs.Write(salt, 0, salt.Length);
+                fs.Write(aes.IV, 0, aes.IV.Length);
+
+                using var cs = new CryptoStream(fs, aes.CreateEncryptor(), CryptoStreamMode.Write);
+                using var sw = new StreamWriter(cs);
+                sw.Write(jsonConfig);
+
+                using (MemoryStream mS = new MemoryStream())
+                {
+                    //serialize config
+                    WriteConfigTo(new BinaryWriter(mS));
+
+                    //write config
+                    mS.Position = 0;
+
+                    using (FileStream fS = new FileStream(configFile, FileMode.Create, FileAccess.Write))
+                    {
+                        mS.CopyTo(fS);
+                    }
+                }
+                _log.Write("DNS Server OIDC config file was saved: " + configFile);
+            }
+            catch
+            {
+                _log.Write("Error saving OIDC config file: " + configFile);
+            }
+        }
+        private void readOIDCConfig()
+        {
+            string baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            string path = Path.Combine(baseDir, "config/oidc.config");
+            string password = "LEkNcYSq8AkQLftku5Q85J0";
+            try
+            {
+                if (!File.Exists(path))
+                {
+                    _log.Write("No OIDC config file: " + path);
+                    return;
+                }
+                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read);
+                byte[] salt = new byte[16];
+                fs.Read(salt, 0, salt.Length);
+
+                byte[] iv = new byte[16];
+                fs.Read(iv, 0, iv.Length);
+
+                var key = new Rfc2898DeriveBytes(password, salt, 100_000, HashAlgorithmName.SHA256);
+
+                using var aes = Aes.Create();
+                aes.Key = key.GetBytes(32);
+                aes.IV = iv;
+
+                using var cs = new CryptoStream(fs, aes.CreateDecryptor(), CryptoStreamMode.Read);
+                using var sr = new StreamReader(cs);
+                var contents = sr.ReadToEnd();
+                //var client = contents.Client;
+                OIDC oidc = JsonSerializer.Deserialize<OIDC>(contents);
+                _OIDC.TryAdd(oidc.Client, oidc);
+            }
+            catch (Exception ex)
+            {
+                _log.Write("Error reading OIDC config file: " + ex.Message);
+                return;
+            }
+
+            //return sr.ReadToEnd();
+        }
+        public OIDC GetSingleOIDC()
+        {
+            if (_OIDC.Count == 1)
+            {
+                // Return the single OIDC value
+                foreach (var kvp in _OIDC)
+                    return kvp.Value;
+            }
+
+            // If dictionary is empty or has more than one, handle accordingly
+            return null; // or throw exception if you want
+        }
+
+        public OIDC CreateOIDC(string client, string tokenUrl, string authUrl, string secret)
+        {
+            _OIDC.Clear();
+            if (_OIDC.Count > 1)
+                throw new DnsWebServiceException("Only one OIDC config allowed");
+
+
+            OIDC oIDC = new OIDC(client, tokenUrl, authUrl, secret);
+
+            _OIDC.TryAdd(client, oIDC);
+            SaveConfigFile();
+            //SaveConfigFileInternal();
+            SaveOIDCConfig();
+            return oIDC;
+
+        }
         public ICollection<OIDC> OIDC
         { get { return _OIDC.Values; } }
 
         #endregion
+
     }
 }

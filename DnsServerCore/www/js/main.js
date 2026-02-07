@@ -40,7 +40,6 @@ window.onload = function () {
     oidcCallback();
     //showPageMain();
     //window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
-
 };
 function showPageLogin() {
     hideAlert();

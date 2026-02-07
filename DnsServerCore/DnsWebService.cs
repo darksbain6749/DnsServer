@@ -469,70 +469,7 @@ namespace DnsServerCore
                     return false;
             }
         }
-        #region oauth2 Auth
 
-        public class TokenResponse
-        {
-            [JsonPropertyName("access_token")]
-            public string AccessToken { get; set; }
-
-            [JsonPropertyName("id_token")]
-            public string IdToken { get; set; }
-
-            [JsonPropertyName("refresh_token")]
-            public string RefreshToken { get; set; }
-        }
-
-
-        private TokenResponse ExchangeCodeForTokens(string code)
-        {
-            HttpClient client = new HttpClient();
-            OIDC oidc = _authManager.GetSingleOIDC();
-            OIDC oidcDetails = oidc.getOIDC();
-
-            string tokenEndpoint = oidcDetails.TokenURL;
-            Dictionary<string, string> parameters = new Dictionary<string, string>
-    {
-        { "grant_type", "authorization_code" },
-        { "code", code },
-        { "redirect_uri", "http://" + _dnsServer.ServerDomain + ":5380/api/auth/callback" },
-        { "client_id", oidcDetails.Client },
-        { "client_secret", oidcDetails.decryptSecret(oidcDetails.Secret) }
-    };
-
-            var response = client.PostAsync(tokenEndpoint, new FormUrlEncodedContent(parameters)).Result;
-
-            if (!response.IsSuccessStatusCode)
-                return null;
-            var content = response.Content.ReadAsStringAsync().Result;
-            return JsonSerializer.Deserialize<TokenResponse>(content);
-        }
-
-
-        private UserInfo ParseIdToken(string idToken)
-        {
-            var handler = new JwtSecurityTokenHandler();
-            var jwt = handler.ReadJwtToken(idToken);
-
-            var email = jwt.Claims.FirstOrDefault(c => c.Type == "email")?.Value;
-            var name = jwt.Claims.FirstOrDefault(c => c.Type == "name")?.Value;
-            var username = jwt.Claims.FirstOrDefault(c => c.Type == "preferred_username")?.Value;
-
-            if (string.IsNullOrEmpty(email))
-                return null;
-
-            return new UserInfo { Email = email, Name = name, UserName = username };
-        }
-
-        public class UserInfo
-        {
-            public string Email { get; set; }
-            public string Name { get; set; }
-            public string UserName { get; set; }
-        }
-
-
-        #endregion
         private void ConfigureWebServiceRoutes()
         {
             _webService.UseExceptionHandler(WebServiceExceptionHandler);
@@ -3186,6 +3123,71 @@ namespace DnsServerCore
                 return _webServiceSslServerAuthenticationOptions.ServerCertificateContext.TargetCertificate;
             }
         }
+
+        #endregion
+
+        #region oauth2 Auth
+
+        public class TokenResponse
+        {
+            [JsonPropertyName("access_token")]
+            public string AccessToken { get; set; }
+
+            [JsonPropertyName("id_token")]
+            public string IdToken { get; set; }
+
+            [JsonPropertyName("refresh_token")]
+            public string RefreshToken { get; set; }
+        }
+
+
+        private TokenResponse ExchangeCodeForTokens(string code)
+        {
+            HttpClient client = new HttpClient();
+            OIDC oidc = _authManager.GetSingleOIDC();
+            OIDC oidcDetails = oidc.getOIDC();
+
+            string tokenEndpoint = oidcDetails.TokenURL;
+            Dictionary<string, string> parameters = new Dictionary<string, string>
+    {
+        { "grant_type", "authorization_code" },
+        { "code", code },
+        { "redirect_uri", "http://" + _dnsServer.ServerDomain + ":5380/api/auth/callback" },
+        { "client_id", oidcDetails.Client },
+        { "client_secret", oidcDetails.decryptSecret(oidcDetails.Secret) }
+    };
+
+            var response = client.PostAsync(tokenEndpoint, new FormUrlEncodedContent(parameters)).Result;
+
+            if (!response.IsSuccessStatusCode)
+                return null;
+            var content = response.Content.ReadAsStringAsync().Result;
+            return JsonSerializer.Deserialize<TokenResponse>(content);
+        }
+
+
+        private UserInfo ParseIdToken(string idToken)
+        {
+            var handler = new JwtSecurityTokenHandler();
+            var jwt = handler.ReadJwtToken(idToken);
+
+            var email = jwt.Claims.FirstOrDefault(c => c.Type == "email")?.Value;
+            var name = jwt.Claims.FirstOrDefault(c => c.Type == "name")?.Value;
+            var username = jwt.Claims.FirstOrDefault(c => c.Type == "preferred_username")?.Value;
+
+            if (string.IsNullOrEmpty(email))
+                return null;
+
+            return new UserInfo { Email = email, Name = name, UserName = username };
+        }
+
+        public class UserInfo
+        {
+            public string Email { get; set; }
+            public string Name { get; set; }
+            public string UserName { get; set; }
+        }
+
 
         #endregion
     }
