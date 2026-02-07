@@ -3126,7 +3126,14 @@ namespace DnsServerCore
 
         #endregion
 
-        #region oauth2 Auth
+
+
+
+
+
+
+
+        #region OIDC
 
         public class TokenResponse
         {
