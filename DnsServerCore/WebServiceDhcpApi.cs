@@ -56,9 +56,9 @@ namespace DnsServerCore
 
             public void ListDhcpLeases(HttpContext context)
             {
-                UserSession session = context.GetCurrentSession();
+                User sessionUser = _dnsWebService.GetSessionUser(context);
 
-                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, session.User, PermissionFlag.View))
+                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, sessionUser, PermissionFlag.View))
                     throw new DnsWebServiceException("Access was denied.");
 
                 IReadOnlyDictionary<string, Scope> scopes = _dnsWebService._dhcpServer.Scopes;
@@ -110,9 +110,9 @@ namespace DnsServerCore
 
             public void ListDhcpScopes(HttpContext context)
             {
-                UserSession session = context.GetCurrentSession();
+                User sessionUser = _dnsWebService.GetSessionUser(context);
 
-                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, session.User, PermissionFlag.View))
+                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, sessionUser, PermissionFlag.View))
                     throw new DnsWebServiceException("Access was denied.");
 
                 IReadOnlyDictionary<string, Scope> scopes = _dnsWebService._dhcpServer.Scopes;
@@ -153,9 +153,9 @@ namespace DnsServerCore
 
             public void GetDhcpScope(HttpContext context)
             {
-                UserSession session = context.GetCurrentSession();
+                User sessionUser = _dnsWebService.GetSessionUser(context);
 
-                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, session.User, PermissionFlag.View))
+                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, sessionUser, PermissionFlag.View))
                     throw new DnsWebServiceException("Access was denied.");
 
                 string scopeName = context.Request.GetQueryOrForm("name");
@@ -194,6 +194,7 @@ namespace DnsServerCore
                 }
 
                 jsonWriter.WriteBoolean("dnsUpdates", scope.DnsUpdates);
+                jsonWriter.WriteBoolean("dnsOverwriteForDynamicLease", scope.DnsOverwriteForDynamicLease);
                 jsonWriter.WriteNumber("dnsTtl", scope.DnsTtl);
 
                 if (scope.ServerAddress is not null)
@@ -373,9 +374,9 @@ namespace DnsServerCore
 
             public async Task SetDhcpScopeAsync(HttpContext context)
             {
-                UserSession session = context.GetCurrentSession();
+                User sessionUser = _dnsWebService.GetSessionUser(context);
 
-                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, session.User, PermissionFlag.Modify))
+                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, sessionUser, PermissionFlag.Modify))
                     throw new DnsWebServiceException("Access was denied.");
 
                 HttpRequest request = context.Request;
@@ -462,6 +463,9 @@ namespace DnsServerCore
 
                 if (request.TryGetQueryOrForm("dnsUpdates", bool.Parse, out bool dnsUpdates))
                     scope.DnsUpdates = dnsUpdates;
+
+                if (request.TryGetQueryOrForm("dnsOverwriteForDynamicLease", bool.Parse, out bool dnsOverwriteForDynamicLease))
+                    scope.DnsOverwriteForDynamicLease = dnsOverwriteForDynamicLease;
 
                 if (request.TryGetQueryOrForm("dnsTtl", ZoneFile.ParseTtl, out uint dnsTtl))
                     scope.DnsTtl = dnsTtl;
@@ -650,28 +654,28 @@ namespace DnsServerCore
                 {
                     _dnsWebService._dhcpServer.SaveScope(scopeName);
 
-                    _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + session.User.Username + "] DHCP scope was updated successfully: " + scopeName);
+                    _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + sessionUser.Username + "] DHCP scope was updated successfully: " + scopeName);
                 }
                 else
                 {
                     await _dnsWebService._dhcpServer.AddScopeAsync(scope);
 
-                    _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + session.User.Username + "] DHCP scope was added successfully: " + scopeName);
+                    _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + sessionUser.Username + "] DHCP scope was added successfully: " + scopeName);
                 }
 
                 if (request.TryGetQueryOrForm("newName", out string newName) && !newName.Equals(scopeName))
                 {
                     _dnsWebService._dhcpServer.RenameScope(scopeName, newName);
 
-                    _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + session.User.Username + "] DHCP scope was renamed successfully: '" + scopeName + "' to '" + newName + "'");
+                    _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + sessionUser.Username + "] DHCP scope was renamed successfully: '" + scopeName + "' to '" + newName + "'");
                 }
             }
 
             public void AddReservedLease(HttpContext context)
             {
-                UserSession session = context.GetCurrentSession();
+                User sessionUser = _dnsWebService.GetSessionUser(context);
 
-                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, session.User, PermissionFlag.Modify))
+                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, sessionUser, PermissionFlag.Modify))
                     throw new DnsWebServiceException("Access was denied.");
 
                 HttpRequest request = context.Request;
@@ -694,14 +698,14 @@ namespace DnsServerCore
 
                 _dnsWebService._dhcpServer.SaveScope(scopeName);
 
-                _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + session.User.Username + "] DHCP scope reserved lease was added successfully: " + scopeName);
+                _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + sessionUser.Username + "] DHCP scope reserved lease was added successfully: " + scopeName);
             }
 
             public void RemoveReservedLease(HttpContext context)
             {
-                UserSession session = context.GetCurrentSession();
+                User sessionUser = _dnsWebService.GetSessionUser(context);
 
-                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, session.User, PermissionFlag.Modify))
+                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, sessionUser, PermissionFlag.Modify))
                     throw new DnsWebServiceException("Access was denied.");
 
                 HttpRequest request = context.Request;
@@ -719,56 +723,56 @@ namespace DnsServerCore
 
                 _dnsWebService._dhcpServer.SaveScope(scopeName);
 
-                _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + session.User.Username + "] DHCP scope reserved lease was removed successfully: " + scopeName);
+                _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + sessionUser.Username + "] DHCP scope reserved lease was removed successfully: " + scopeName);
             }
 
             public async Task EnableDhcpScopeAsync(HttpContext context)
             {
-                UserSession session = context.GetCurrentSession();
+                User sessionUser = _dnsWebService.GetSessionUser(context);
 
-                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, session.User, PermissionFlag.Modify))
+                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, sessionUser, PermissionFlag.Modify))
                     throw new DnsWebServiceException("Access was denied.");
 
                 string scopeName = context.Request.GetQueryOrForm("name");
 
                 await _dnsWebService._dhcpServer.EnableScopeAsync(scopeName, true);
 
-                _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + session.User.Username + "] DHCP scope was enabled successfully: " + scopeName);
+                _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + sessionUser.Username + "] DHCP scope was enabled successfully: " + scopeName);
             }
 
             public void DisableDhcpScope(HttpContext context)
             {
-                UserSession session = context.GetCurrentSession();
+                User sessionUser = _dnsWebService.GetSessionUser(context);
 
-                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, session.User, PermissionFlag.Modify))
+                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, sessionUser, PermissionFlag.Modify))
                     throw new DnsWebServiceException("Access was denied.");
 
                 string scopeName = context.Request.GetQueryOrForm("name");
 
                 _dnsWebService._dhcpServer.DisableScope(scopeName, true);
 
-                _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + session.User.Username + "] DHCP scope was disabled successfully: " + scopeName);
+                _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + sessionUser.Username + "] DHCP scope was disabled successfully: " + scopeName);
             }
 
             public void DeleteDhcpScope(HttpContext context)
             {
-                UserSession session = context.GetCurrentSession();
+                User sessionUser = _dnsWebService.GetSessionUser(context);
 
-                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, session.User, PermissionFlag.Delete))
+                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, sessionUser, PermissionFlag.Delete))
                     throw new DnsWebServiceException("Access was denied.");
 
                 string scopeName = context.Request.GetQueryOrForm("name");
 
                 _dnsWebService._dhcpServer.DeleteScope(scopeName);
 
-                _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + session.User.Username + "] DHCP scope was deleted successfully: " + scopeName);
+                _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + sessionUser.Username + "] DHCP scope was deleted successfully: " + scopeName);
             }
 
             public void RemoveDhcpLease(HttpContext context)
             {
-                UserSession session = context.GetCurrentSession();
+                User sessionUser = _dnsWebService.GetSessionUser(context);
 
-                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, session.User, PermissionFlag.Delete))
+                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, sessionUser, PermissionFlag.Delete))
                     throw new DnsWebServiceException("Access was denied.");
 
                 HttpRequest request = context.Request;
@@ -791,14 +795,14 @@ namespace DnsServerCore
 
                 _dnsWebService._dhcpServer.SaveScope(scopeName);
 
-                _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + session.User.Username + "] DHCP scope's lease was removed successfully: " + scopeName);
+                _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + sessionUser.Username + "] DHCP scope's lease was removed successfully: " + scopeName);
             }
 
             public void ConvertToReservedLease(HttpContext context)
             {
-                UserSession session = context.GetCurrentSession();
+                User sessionUser = _dnsWebService.GetSessionUser(context);
 
-                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, session.User, PermissionFlag.Modify))
+                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, sessionUser, PermissionFlag.Modify))
                     throw new DnsWebServiceException("Access was denied.");
 
                 HttpRequest request = context.Request;
@@ -821,14 +825,14 @@ namespace DnsServerCore
 
                 _dnsWebService._dhcpServer.SaveScope(scopeName);
 
-                _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + session.User.Username + "] DHCP scope's lease was reserved successfully: " + scopeName);
+                _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + sessionUser.Username + "] DHCP scope's lease was reserved successfully: " + scopeName);
             }
 
             public void ConvertToDynamicLease(HttpContext context)
             {
-                UserSession session = context.GetCurrentSession();
+                User sessionUser = _dnsWebService.GetSessionUser(context);
 
-                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, session.User, PermissionFlag.Modify))
+                if (!_dnsWebService._authManager.IsPermitted(PermissionSection.DhcpServer, sessionUser, PermissionFlag.Modify))
                     throw new DnsWebServiceException("Access was denied.");
 
                 HttpRequest request = context.Request;
@@ -851,7 +855,7 @@ namespace DnsServerCore
 
                 _dnsWebService._dhcpServer.SaveScope(scopeName);
 
-                _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + session.User.Username + "] DHCP scope's lease was unreserved successfully: " + scopeName);
+                _dnsWebService._log.Write(context.GetRemoteEndPoint(_dnsWebService._webServiceRealIpHeader), "[" + sessionUser.Username + "] DHCP scope's lease was unreserved successfully: " + scopeName);
             }
 
             #endregion

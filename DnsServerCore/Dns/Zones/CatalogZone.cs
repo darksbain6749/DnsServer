@@ -1,6 +1,6 @@
 ﻿/*
 Technitium DNS Server
-Copyright (C) 2024  Shreyas Zare (shreyas@technitium.com)
+Copyright (C) 2025  Shreyas Zare (shreyas@technitium.com)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -197,6 +197,17 @@ namespace DnsServerCore.Dns.Zones
             }
         }
 
+        public AuthZoneType GetZoneTypeProperty(string memberZoneName)
+        {
+            string domain = "zone-type.ext." + GetMemberZoneDomain(memberZoneName);
+
+            IReadOnlyList<DnsResourceRecord> records = _dnsServer.AuthZoneManager.GetRecords(_name, domain, DnsResourceRecordType.TXT);
+            if (records.Count > 0)
+                return Enum.Parse<AuthZoneType>((records[0].RDATA as DnsTXTRecordData).GetText(), true);
+
+            return AuthZoneType.Primary;
+        }
+
         public void SetAllowQueryProperty(IReadOnlyCollection<NetworkAccessControl> acl = null, string memberZoneName = null)
         {
             string domain = "allow-query.ext." + GetMemberZoneDomain(memberZoneName);
@@ -231,7 +242,7 @@ namespace DnsServerCore.Dns.Zones
             }
         }
 
-        public void SetZoneTransferTsigKeyNamesProperty(IReadOnlyDictionary<string, object> tsigKeyNames = null, string memberZoneName = null)
+        public void SetZoneTransferTsigKeyNamesProperty(IReadOnlySet<string> tsigKeyNames = null, string memberZoneName = null)
         {
             string domain = "transfer-tsig-key-names.ext." + GetMemberZoneDomain(memberZoneName);
 
@@ -244,9 +255,9 @@ namespace DnsServerCore.Dns.Zones
                 DnsResourceRecord[] records = new DnsResourceRecord[tsigKeyNames.Count];
                 int i = 0;
 
-                foreach (KeyValuePair<string, object> entry in tsigKeyNames)
+                foreach (string entry in tsigKeyNames)
                 {
-                    DnsResourceRecord record = new DnsResourceRecord(domain, DnsResourceRecordType.PTR, DnsClass.IN, 0, new DnsPTRRecordData(entry.Key));
+                    DnsResourceRecord record = new DnsResourceRecord(domain, DnsResourceRecordType.PTR, DnsClass.IN, 0, new DnsPTRRecordData(entry));
                     record.GetAuthGenericRecordInfo().LastModified = DateTime.UtcNow;
 
                     records[i++] = record;
@@ -272,6 +283,57 @@ namespace DnsServerCore.Dns.Zones
                 });
 
                 DnsResourceRecord record = new DnsResourceRecord(domain, DnsResourceRecordType.TXT, DnsClass.IN, 0, new DnsTXTRecordData(charStrings));
+                record.GetAuthGenericRecordInfo().LastModified = DateTime.UtcNow;
+
+                _dnsServer.AuthZoneManager.SetRecord(_name, record);
+            }
+        }
+
+        public void SetPrimaryZoneTransferProtocolProperty(DnsTransportProtocol? zoneTransferProtocol = null, string memberZoneName = null)
+        {
+            string domain = "primary-transfer-protocol.ext." + GetMemberZoneDomain(memberZoneName);
+
+            if (zoneTransferProtocol is null)
+            {
+                _dnsServer.AuthZoneManager.DeleteRecords(_name, domain, DnsResourceRecordType.TXT);
+            }
+            else
+            {
+                DnsResourceRecord record = new DnsResourceRecord(domain, DnsResourceRecordType.TXT, DnsClass.IN, 0, new DnsTXTRecordData(zoneTransferProtocol.ToString()));
+                record.GetAuthGenericRecordInfo().LastModified = DateTime.UtcNow;
+
+                _dnsServer.AuthZoneManager.SetRecord(_name, record);
+            }
+        }
+
+        public void SetPrimaryZoneTransferTsigKeyNameProperty(string tsigKeyName = null, string memberZoneName = null)
+        {
+            string domain = "primary-transfer-tsig-key-name.ext." + GetMemberZoneDomain(memberZoneName);
+
+            if (tsigKeyName is null)
+            {
+                _dnsServer.AuthZoneManager.DeleteRecords(_name, domain, DnsResourceRecordType.PTR);
+            }
+            else
+            {
+                DnsResourceRecord record = new DnsResourceRecord(domain, DnsResourceRecordType.PTR, DnsClass.IN, 0, new DnsPTRRecordData(tsigKeyName));
+                record.GetAuthGenericRecordInfo().LastModified = DateTime.UtcNow;
+
+                _dnsServer.AuthZoneManager.SetRecord(_name, record);
+            }
+        }
+
+        public void SetZoneMdValidationProperty(bool? validateZone = null, string memberZoneName = null)
+        {
+            string domain = "zonemd-validation.ext." + GetMemberZoneDomain(memberZoneName);
+
+            if (validateZone is null)
+            {
+                _dnsServer.AuthZoneManager.DeleteRecords(_name, domain, DnsResourceRecordType.TXT);
+            }
+            else
+            {
+                DnsResourceRecord record = new DnsResourceRecord(domain, DnsResourceRecordType.TXT, DnsClass.IN, 0, new DnsTXTRecordData(validateZone.ToString()));
                 record.GetAuthGenericRecordInfo().LastModified = DateTime.UtcNow;
 
                 _dnsServer.AuthZoneManager.SetRecord(_name, record);
