@@ -1,6 +1,6 @@
 ﻿/*
 Technitium DNS Server
-Copyright (C) 2024  Shreyas Zare (shreyas@technitium.com)
+Copyright (C) 2025  Shreyas Zare (shreyas@technitium.com)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -31,6 +31,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using TechnitiumLibrary.Net;
+using TechnitiumLibrary.Security.OTP;
 
 namespace DnsServerCore.Auth
 {
@@ -38,12 +39,10 @@ namespace DnsServerCore.Auth
     {
         #region variables
 
-        readonly ConcurrentDictionary<string, Group> _groups = new ConcurrentDictionary<string, Group>(1, 4);
-        readonly ConcurrentDictionary<string, User> _users = new ConcurrentDictionary<string, User>(1, 4);
-
-        readonly ConcurrentDictionary<PermissionSection, Permission> _permissions = new ConcurrentDictionary<PermissionSection, Permission>(1, 11);
-
-        readonly ConcurrentDictionary<string, UserSession> _sessions = new ConcurrentDictionary<string, UserSession>(1, 10);
+        ConcurrentDictionary<string, Group> _groups = new ConcurrentDictionary<string, Group>(1, 4);
+        ConcurrentDictionary<string, User> _users = new ConcurrentDictionary<string, User>(1, 4);
+        ConcurrentDictionary<PermissionSection, Permission> _permissions = new ConcurrentDictionary<PermissionSection, Permission>(1, 11);
+        ConcurrentDictionary<string, UserSession> _sessions = new ConcurrentDictionary<string, UserSession>(1, 10);
 
         readonly ConcurrentDictionary<IPAddress, int> _failedLoginAttemptNetworks = new ConcurrentDictionary<IPAddress, int>(1, 10);
         const int MAX_LOGIN_ATTEMPTS = 5;
@@ -57,7 +56,7 @@ namespace DnsServerCore.Auth
         readonly object _saveLock = new object();
         bool _pendingSave;
         readonly Timer _saveTimer;
-        const int SAVE_TIMER_INITIAL_INTERVAL = 10000;
+        const int SAVE_TIMER_INITIAL_INTERVAL = 5000;
 
         #endregion
 
@@ -89,6 +88,8 @@ namespace DnsServerCore.Auth
                     }
                 }
             });
+
+            LoadConfigFile();
         }
 
         #endregion
@@ -106,7 +107,7 @@ namespace DnsServerCore.Auth
             {
                 _saveTimer?.Dispose();
 
-                //always save config here
+                //always save config here to write user login timestamps details
                 try
                 {
                     SaveConfigFileInternal();
@@ -126,9 +127,9 @@ namespace DnsServerCore.Auth
 
         #endregion
 
-        #region private
+        #region config
 
-        private void CreateDefaultConfig()
+        private void LoadConfigFile()
         {
             Group adminGroup = CreateGroup(Group.ADMINISTRATORS, "Super administrators");
             Group dnsAdminGroup = CreateGroup(Group.DNS_ADMINISTRATORS, "DNS service administrators");
@@ -221,7 +222,7 @@ namespace DnsServerCore.Auth
 
                 using (FileStream fS = new FileStream(configFile, FileMode.Open, FileAccess.Read))
                 {
-                    ReadConfigFrom(new BinaryReader(fS));
+                    ReadConfigFrom(fS, false);
                 }
 
                 readOIDCConfig();
@@ -264,11 +265,14 @@ namespace DnsServerCore.Auth
                     {
                         adminUser.ChangePassword("admin");
                         adminUser.Disabled = false;
+
+                        if (adminUser.TOTPEnabled)
+                            adminUser.DisableTOTP();
                     }
 
                     adminUser.AddToGroup(GetGroup(Group.ADMINISTRATORS));
 
-                    _log.Write("DNS Server reset password for user: admin");
+                    _log.Write("DNS Server has reset the password for user: admin");
                     SaveConfigFileInternal();
 
                     try
@@ -281,9 +285,6 @@ namespace DnsServerCore.Auth
             }
             catch (FileNotFoundException)
             {
-                _log.Write("DNS Server auth config file was not found: " + configFile);
-                _log.Write("DNS Server is restoring default auth config file.");
-
                 CreateDefaultConfig();
 
                 SaveConfigFileInternal();
@@ -294,8 +295,70 @@ namespace DnsServerCore.Auth
                 _log.Write("Note: You may try deleting the auth config file to fix this issue. However, you will lose auth settings but, rest of the DNS settings and zone data wont be affected.");
                 throw;
             }
-            
         }
+
+        public void LoadOldConfig(string password, bool isPasswordHash)
+        {
+            User user = GetUser("admin");
+            if (user is null)
+                user = CreateUser("Administrator", "admin", "admin");
+
+            user.AddToGroup(GetGroup(Group.ADMINISTRATORS));
+
+            if (isPasswordHash)
+                user.LoadOldSchemeCredentials(password);
+            else
+                user.ChangePassword(password);
+
+            lock (_saveLock)
+            {
+                SaveConfigFileInternal();
+            }
+        }
+
+        public void LoadConfig(Stream s, bool isConfigTransfer, UserSession implantSession = null)
+        {
+            lock (_saveLock)
+            {
+                ReadConfigFrom(s, isConfigTransfer);
+
+                if (!isConfigTransfer)
+                {
+                    if (implantSession is not null)
+                    {
+                        //implant current user and session into config while restoring backup config
+                        using (MemoryStream mS = new MemoryStream())
+                        {
+                            //implant current user
+                            implantSession.User.WriteTo(new BinaryWriter(mS));
+
+                            mS.Position = 0;
+                            User newUser = new User(new BinaryReader(mS), _groups);
+                            newUser.AddToGroup(GetGroup(Group.ADMINISTRATORS));
+                            _users[newUser.Username] = newUser;
+
+                            //implant current session
+                            mS.SetLength(0);
+                            implantSession.WriteTo(new BinaryWriter(mS));
+
+                            mS.Position = 0;
+                            UserSession newSession = new UserSession(new BinaryReader(mS), _users);
+                            _sessions[newSession.Token] = newSession;
+                        }
+                    }
+                }
+
+                //save config file
+                SaveConfigFileInternal();
+
+                if (_pendingSave)
+                {
+                    _pendingSave = false;
+                    _saveTimer.Change(Timeout.Infinite, Timeout.Infinite);
+                }
+            }
+        }
+
         private void SaveConfigFileInternal()
         {
             string configFile = Path.Combine(_configFolder, "auth.config");
@@ -303,7 +366,7 @@ namespace DnsServerCore.Auth
             using (MemoryStream mS = new MemoryStream())
             {
                 //serialize config
-                WriteConfigTo(new BinaryWriter(mS));
+                WriteConfigTo(mS);
 
                 //write config
                 mS.Position = 0;
@@ -316,10 +379,30 @@ namespace DnsServerCore.Auth
             SaveOIDCConfig();
             _log.Write("DNS Server auth config file was saved: " + configFile);
         }
-        private void ReadConfigFrom(BinaryReader bR)
+
+        public void SaveConfigFile()
         {
+            lock (_saveLock)
+            {
+                if (_pendingSave)
+                    return;
+
+                _pendingSave = true;
+                _saveTimer.Change(SAVE_TIMER_INITIAL_INTERVAL, Timeout.Infinite);
+            }
+        }
+
+        private void ReadConfigFrom(Stream s, bool isConfigTransfer)
+        {
+            BinaryReader bR = new BinaryReader(s);
+
             if (Encoding.ASCII.GetString(bR.ReadBytes(2)) != "AS") //format
                 throw new InvalidDataException("DNS Server auth config file format is invalid.");
+
+            ConcurrentDictionary<string, Group> groups = new ConcurrentDictionary<string, Group>(1, 4);
+            ConcurrentDictionary<string, User> users = new ConcurrentDictionary<string, User>(1, 4);
+            ConcurrentDictionary<PermissionSection, Permission> permissions = new ConcurrentDictionary<PermissionSection, Permission>(1, 11);
+            ConcurrentDictionary<string, UserSession> sessions = new ConcurrentDictionary<string, UserSession>(1, 10);
 
             int version = bR.ReadByte();
             switch (version)
@@ -327,38 +410,42 @@ namespace DnsServerCore.Auth
                 case 1:
                     {
                         int count = bR.ReadByte();
+
                         for (int i = 0; i < count; i++)
                         {
                             Group group = new Group(bR);
-                            _groups.TryAdd(group.Name.ToLowerInvariant(), group);
+                            groups.TryAdd(group.Name.ToLowerInvariant(), group);
                         }
                     }
 
                     {
                         int count = bR.ReadByte();
+
                         for (int i = 0; i < count; i++)
                         {
-                            User user = new User(bR, this);
-                            _users.TryAdd(user.Username, user);
+                            User user = new User(bR, groups);
+                            users.TryAdd(user.Username, user);
                         }
                     }
 
                     {
                         int count = bR.ReadInt32();
+
                         for (int i = 0; i < count; i++)
                         {
-                            Permission permission = new Permission(bR, this);
-                            _permissions.TryAdd(permission.Section, permission);
+                            Permission permission = new Permission(bR, users, groups);
+                            permissions.TryAdd(permission.Section, permission);
                         }
                     }
 
                     {
                         int count = bR.ReadInt32();
+
                         for (int i = 0; i < count; i++)
                         {
-                            UserSession session = new UserSession(bR, this);
+                            UserSession session = new UserSession(bR, users);
                             if (!session.HasExpired())
-                                _sessions.TryAdd(session.Token, session);
+                                sessions.TryAdd(session.Token, session);
                         }
                     }
 
@@ -379,9 +466,64 @@ namespace DnsServerCore.Auth
                 default:
                     throw new InvalidDataException("DNS Server auth config version not supported.");
             }
+
+            _groups = groups;
+            _users = users;
+
+            if (isConfigTransfer)
+            {
+                //sync only required permissions from newly loaded config
+                foreach (KeyValuePair<PermissionSection, Permission> permission in permissions)
+                {
+                    switch (permission.Key)
+                    {
+                        case PermissionSection.Zones:
+                            //sync user and group permissions as-is for zones section
+                            Permission zonesPermission = _permissions[PermissionSection.Zones];
+
+                            zonesPermission.SyncPermissions(permission.Value.UserPermissions);
+                            zonesPermission.SyncPermissions(permission.Value.GroupPermissions);
+                            break;
+
+                        default:
+                            _permissions[permission.Key] = permission.Value;
+                            break;
+                    }
+                }
+
+                //update all user objects in existing sessions to reflect the newly loaded config
+                foreach (KeyValuePair<string, UserSession> session in _sessions)
+                    session.Value.UpdateUserObject(_users);
+
+                //sync only API sessions from newly loaded config
+                foreach (KeyValuePair<string, UserSession> existingSession in _sessions)
+                {
+                    if (existingSession.Value.Type == UserSessionType.ApiToken)
+                    {
+                        if (!sessions.ContainsKey(existingSession.Key))
+                            _sessions.TryRemove(existingSession);
+                    }
+                }
+
+                foreach (KeyValuePair<string, UserSession> session in sessions)
+                {
+                    if (session.Value.Type == UserSessionType.ApiToken)
+                        _sessions[session.Key] = session.Value;
+                }
+            }
+            else
+            {
+                _permissions = permissions;
+                _sessions = sessions;
+            }
+        }
+
+        private void WriteConfigTo(Stream s)
         }
         private void WriteConfigTo(BinaryWriter bW)
         {
+            BinaryWriter bW = new BinaryWriter(s);
+
             bW.Write(Encoding.ASCII.GetBytes("AS")); //format
             bW.Write((byte)1); //version
 
@@ -414,6 +556,135 @@ namespace DnsServerCore.Auth
 
             foreach (UserSession session in activeSessions)
                 session.WriteTo(bW);
+
+        #endregion
+
+        #region private
+
+        private void CreateDefaultConfig()
+        {
+            Group adminGroup = CreateGroup(Group.ADMINISTRATORS, "Super administrators");
+            Group dnsAdminGroup = CreateGroup(Group.DNS_ADMINISTRATORS, "DNS service administrators");
+            Group dhcpAdminGroup = CreateGroup(Group.DHCP_ADMINISTRATORS, "DHCP service administrators");
+            Group everyoneGroup = CreateGroup(Group.EVERYONE, "All users");
+
+            SetPermission(PermissionSection.Dashboard, adminGroup, PermissionFlag.ViewModifyDelete);
+            SetPermission(PermissionSection.Zones, adminGroup, PermissionFlag.ViewModifyDelete);
+            SetPermission(PermissionSection.Cache, adminGroup, PermissionFlag.ViewModifyDelete);
+            SetPermission(PermissionSection.Allowed, adminGroup, PermissionFlag.ViewModifyDelete);
+            SetPermission(PermissionSection.Blocked, adminGroup, PermissionFlag.ViewModifyDelete);
+            SetPermission(PermissionSection.Apps, adminGroup, PermissionFlag.ViewModifyDelete);
+            SetPermission(PermissionSection.DnsClient, adminGroup, PermissionFlag.ViewModifyDelete);
+            SetPermission(PermissionSection.Settings, adminGroup, PermissionFlag.ViewModifyDelete);
+            SetPermission(PermissionSection.DhcpServer, adminGroup, PermissionFlag.ViewModifyDelete);
+            SetPermission(PermissionSection.Administration, adminGroup, PermissionFlag.ViewModifyDelete);
+            SetPermission(PermissionSection.Logs, adminGroup, PermissionFlag.ViewModifyDelete);
+
+            SetPermission(PermissionSection.Zones, dnsAdminGroup, PermissionFlag.ViewModifyDelete);
+            SetPermission(PermissionSection.Cache, dnsAdminGroup, PermissionFlag.ViewModifyDelete);
+            SetPermission(PermissionSection.Allowed, dnsAdminGroup, PermissionFlag.ViewModifyDelete);
+            SetPermission(PermissionSection.Blocked, dnsAdminGroup, PermissionFlag.ViewModifyDelete);
+            SetPermission(PermissionSection.Apps, dnsAdminGroup, PermissionFlag.ViewModifyDelete);
+            SetPermission(PermissionSection.DnsClient, dnsAdminGroup, PermissionFlag.ViewModifyDelete);
+            SetPermission(PermissionSection.Settings, dnsAdminGroup, PermissionFlag.ViewModifyDelete);
+
+            SetPermission(PermissionSection.DhcpServer, dhcpAdminGroup, PermissionFlag.ViewModifyDelete);
+
+            SetPermission(PermissionSection.Dashboard, everyoneGroup, PermissionFlag.View);
+            SetPermission(PermissionSection.Zones, everyoneGroup, PermissionFlag.View);
+            SetPermission(PermissionSection.Cache, everyoneGroup, PermissionFlag.View);
+            SetPermission(PermissionSection.Allowed, everyoneGroup, PermissionFlag.View);
+            SetPermission(PermissionSection.Blocked, everyoneGroup, PermissionFlag.View);
+            SetPermission(PermissionSection.Apps, everyoneGroup, PermissionFlag.View);
+            SetPermission(PermissionSection.DnsClient, everyoneGroup, PermissionFlag.View);
+            SetPermission(PermissionSection.DhcpServer, everyoneGroup, PermissionFlag.View);
+            SetPermission(PermissionSection.Logs, everyoneGroup, PermissionFlag.View);
+
+            string adminPassword = Environment.GetEnvironmentVariable("DNS_SERVER_ADMIN_PASSWORD");
+            string adminPasswordFile = Environment.GetEnvironmentVariable("DNS_SERVER_ADMIN_PASSWORD_FILE");
+
+            User adminUser;
+
+            if (!string.IsNullOrEmpty(adminPassword))
+            {
+                adminUser = CreateUser("Administrator", "admin", adminPassword);
+            }
+            else if (!string.IsNullOrEmpty(adminPasswordFile))
+            {
+                try
+                {
+                    using (StreamReader sR = new StreamReader(adminPasswordFile, true))
+                    {
+                        string password = sR.ReadLine();
+                        adminUser = CreateUser("Administrator", "admin", password);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _log.Write(ex);
+
+                    adminUser = CreateUser("Administrator", "admin", "admin");
+                }
+            }
+            else
+            {
+                adminUser = CreateUser("Administrator", "admin", "admin");
+            }
+
+            adminUser.AddToGroup(adminGroup);
+        }
+
+        private async Task<User> AuthenticateUserAsync(string username, string password, string totp, IPAddress remoteAddress)
+        {
+            IPAddress network = GetClientNetwork(remoteAddress);
+
+            if (IsNetworkBlocked(network))
+                throw new DnsWebServiceException("Max limit of " + MAX_LOGIN_ATTEMPTS + " attempts exceeded. Access blocked for " + (BLOCK_NETWORK_INTERVAL / 1000) + " seconds.");
+
+            User user = GetUser(username);
+
+            if ((user is null) || !user.PasswordHash.Equals(user.GetPasswordHashFor(password), StringComparison.Ordinal))
+            {
+                if (password != "admin")
+                {
+                    MarkFailedLoginAttempt(network);
+
+                    if (HasLoginAttemptExceedLimit(network, MAX_LOGIN_ATTEMPTS))
+                        BlockNetwork(network, BLOCK_NETWORK_INTERVAL);
+                }
+
+                await Task.Delay(1000);
+
+                throw new DnsWebServiceException("Invalid username or password for user: " + username);
+            }
+
+            if (user.TOTPEnabled)
+            {
+                if (string.IsNullOrEmpty(totp))
+                    throw new TwoFactorAuthRequiredWebServiceException("A time-based one-time password (TOTP) is required for user: " + username);
+
+                Authenticator authenticator = new Authenticator(user.TOTPKeyUri);
+
+                if (!authenticator.IsTOTPValid(totp))
+                {
+                    MarkFailedLoginAttempt(network);
+
+                    if (HasLoginAttemptExceedLimit(network, MAX_LOGIN_ATTEMPTS))
+                        BlockNetwork(network, BLOCK_NETWORK_INTERVAL);
+
+                    await Task.Delay(1000);
+
+                    throw new DnsWebServiceException("Invalid time-based one-time password (TOTP) was attempted for user: " + username);
+                }
+            }
+
+            ResetFailedLoginAttempts(network);
+
+            if (user.Disabled)
+                throw new DnsWebServiceException("User account is disabled. Please contact your administrator.");
+
+            return user;
+        }
 
             bW.Write(Convert.ToByte(_OIDC.Count));
 
@@ -528,6 +799,15 @@ namespace DnsServerCore.Auth
             }
 
             _users.TryRemove(oldUsername, out _);
+        }
+
+        public async Task<User> ChangePasswordAsync(string username, string password, string totp, IPAddress remoteAddress, string newPassword, int iterations)
+        {
+            User user = await AuthenticateUserAsync(username, password, totp, remoteAddress);
+
+            user.ChangePassword(newPassword, iterations);
+
+            return user;
         }
 
         public bool DeleteUser(string username)
@@ -677,34 +957,9 @@ namespace DnsServerCore.Auth
             return userSessions;
         }
 
-        public async Task<UserSession> CreateSessionAsync(UserSessionType type, string tokenName, string username, string password, IPAddress remoteAddress, string userAgent)
+        public async Task<UserSession> CreateSessionAsync(UserSessionType type, string tokenName, string username, string password, string totp, IPAddress remoteAddress, string userAgent)
         {
-            IPAddress network = GetClientNetwork(remoteAddress);
-
-            if (IsNetworkBlocked(network))
-                throw new DnsWebServiceException("Max limit of " + MAX_LOGIN_ATTEMPTS + " attempts exceeded. Access blocked for " + (BLOCK_NETWORK_INTERVAL / 1000) + " seconds.");
-
-            User user = GetUser(username);
-
-            if ((user is null) || !user.PasswordHash.Equals(user.GetPasswordHashFor(password), StringComparison.Ordinal))
-            {
-                if (password != "admin")
-                {
-                    MarkFailedLoginAttempt(network);
-
-                    if (HasLoginAttemptExceedLimit(network, MAX_LOGIN_ATTEMPTS))
-                        BlockNetwork(network, BLOCK_NETWORK_INTERVAL);
-
-                    await Task.Delay(1000);
-                }
-
-                throw new DnsWebServiceException("Invalid username or password for user: " + username);
-            }
-
-            ResetFailedLoginAttempts(network);
-
-            if (user.Disabled)
-                throw new DnsWebServiceException("User account is disabled. Please contact your administrator.");
+            User user = await AuthenticateUserAsync(username, password, totp, remoteAddress);
 
             UserSession session = new UserSession(type, tokenName, user, remoteAddress, userAgent);
 
@@ -862,50 +1117,6 @@ namespace DnsServerCore.Auth
         public bool IsPermitted(PermissionSection section, string subItemName, User user, PermissionFlag flag)
         {
             return _permissions.TryGetValue(section, out Permission permission) && permission.IsSubItemPermitted(subItemName, user, flag);
-        }
-
-        public void LoadOldConfig(string password, bool isPasswordHash)
-        {
-            User user = GetUser("admin");
-            if (user is null)
-                user = CreateUser("Administrator", "admin", "admin");
-
-            user.AddToGroup(GetGroup(Group.ADMINISTRATORS));
-
-            if (isPasswordHash)
-                user.LoadOldSchemeCredentials(password);
-            else
-                user.ChangePassword(password);
-
-            lock (_saveLock)
-            {
-                SaveConfigFileInternal();
-            }
-        }
-
-        public void LoadConfigFile(UserSession implantSession = null)
-        {
-            lock (_saveLock)
-            {
-                _groups.Clear();
-                _users.Clear();
-                _permissions.Clear();
-                _sessions.Clear();
-
-                LoadConfigFileInternal(implantSession);
-            }
-        }
-
-        public void SaveConfigFile()
-        {
-            lock (_saveLock)
-            {
-                if (_pendingSave)
-                    return;
-
-                _pendingSave = true;
-                _saveTimer.Change(SAVE_TIMER_INITIAL_INTERVAL, Timeout.Infinite);
-            }
         }
 
         #endregion

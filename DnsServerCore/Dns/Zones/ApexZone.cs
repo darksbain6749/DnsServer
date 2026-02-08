@@ -1,6 +1,6 @@
 ﻿/*
 Technitium DNS Server
-Copyright (C) 2024  Shreyas Zare (shreyas@technitium.com)
+Copyright (C) 2025  Shreyas Zare (shreyas@technitium.com)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -83,7 +83,7 @@ namespace DnsServerCore.Dns.Zones
 
         protected AuthZoneTransfer _zoneTransfer;
         IReadOnlyCollection<NetworkAccessControl> _zoneTransferNetworkACL;
-        IReadOnlyDictionary<string, object> _zoneTransferTsigKeyNames;
+        IReadOnlySet<string> _zoneTransferTsigKeyNames;
         readonly List<DnsResourceRecord> _zoneHistory; //for IXFR support
 
         AuthZoneNotify _notify;
@@ -98,7 +98,7 @@ namespace DnsServerCore.Dns.Zones
 
         Timer _notifyTimer;
         bool _notifyTimerTriggered;
-        const int NOTIFY_TIMER_INTERVAL = 10000;
+        const int NOTIFY_TIMER_INTERVAL = 5000;
         List<string> _notifyList;
         List<string> _notifyFailed;
         const int NOTIFY_TIMEOUT = 10000;
@@ -266,7 +266,7 @@ namespace DnsServerCore.Dns.Zones
                                 _notifyFailed.Add(nameServerHost);
                         }
 
-                        _dnsServer.LogManager?.Write("DNS Server failed to notify name server '" + nameServerHost + "' due to failure in resolving its IP address for zone: " + ToString());
+                        _dnsServer.LogManager.Write("DNS Server failed to notify name server '" + nameServerHost + "' due to failure in resolving its IP address for zone: " + ToString());
                     }
                 }
 
@@ -366,14 +366,16 @@ namespace DnsServerCore.Dns.Zones
                                 if (_notifyFailed.Count > 0)
                                 {
                                     //set timer to notify failed name servers again
-                                    _notifyTimer.Change(Math.Max(GetZoneSoaRetry(), _dnsServer.AuthZoneManager.MinSoaRetry) * 1000, Timeout.Infinite);
+                                    _notifyTimer?.Change(Math.Max(GetZoneSoaRetry(), _dnsServer.AuthZoneManager.MinSoaRetry) * 1000, Timeout.Infinite);
                                 }
                             }
                         }
                     }
+                    catch (ObjectDisposedException)
+                    { }
                     catch (Exception ex)
                     {
-                        _dnsServer.LogManager?.Write(ex);
+                        _dnsServer.LogManager.Write(ex);
                     }
                     finally
                     {
@@ -383,7 +385,12 @@ namespace DnsServerCore.Dns.Zones
             )
             {
                 //failed to queue notify task; try again in some time
-                _notifyTimer?.Change(NOTIFY_TIMER_INTERVAL, Timeout.Infinite);
+                try
+                {
+                    _notifyTimer?.Change(NOTIFY_TIMER_INTERVAL, Timeout.Infinite);
+                }
+                catch (ObjectDisposedException)
+                { }
             }
         }
 
@@ -420,7 +427,7 @@ namespace DnsServerCore.Dns.Zones
                                 _notifyFailed.Remove(nameServerHost);
                             }
 
-                            _dnsServer.LogManager?.Write("DNS Server successfully notified name server '" + nameServerHost + "' for zone: " + ToString());
+                            _dnsServer.LogManager.Write("DNS Server successfully notified name server '" + nameServerHost + "' for zone: " + ToString());
                         }
                         break;
 
@@ -433,7 +440,7 @@ namespace DnsServerCore.Dns.Zones
                                     _notifyFailed.Add(nameServerHost);
                             }
 
-                            _dnsServer.LogManager?.Write("DNS Server failed to notify name server '" + nameServerHost + "' (RCODE=" + response.RCODE.ToString() + ") for zone: " + ToString());
+                            _dnsServer.LogManager.Write("DNS Server failed to notify name server '" + nameServerHost + "' (RCODE=" + response.RCODE.ToString() + ") for zone: " + ToString());
                         }
                         break;
                 }
@@ -446,7 +453,7 @@ namespace DnsServerCore.Dns.Zones
                         _notifyFailed.Add(nameServerHost);
                 }
 
-                _dnsServer.LogManager?.Write("DNS Server failed to notify name server '" + nameServerHost + "' for zone: " + ToString() + "\r\n" + ex.ToString());
+                _dnsServer.LogManager.Write("DNS Server failed to notify name server '" + nameServerHost + "' for zone: " + ToString() + "\r\n" + ex.ToString());
             }
             finally
             {
@@ -591,7 +598,7 @@ namespace DnsServerCore.Dns.Zones
             }
             catch (Exception ex)
             {
-                _dnsServer.LogManager?.Write(ex);
+                _dnsServer.LogManager.Write(ex);
             }
             finally
             {
@@ -1097,23 +1104,26 @@ namespace DnsServerCore.Dns.Zones
         public async Task<IReadOnlyList<NameServerAddress>> GetResolvedNameServerAddressesAsync(IReadOnlyList<NameServerAddress> nameServers)
         {
             List<NameServerAddress> resolvedNameServers = new List<NameServerAddress>(nameServers.Count * 2);
+            List<Task> resolverTasks = new List<Task>(nameServers.Count);
 
             foreach (NameServerAddress nameServer in nameServers)
             {
                 if (nameServer.IsIPEndPointStale)
-                    await ResolveNameServerAddressesAsync(nameServer.Host, nameServer.Port, nameServer.Protocol, resolvedNameServers);
+                    resolverTasks.Add(ResolveNameServerAddressesAsync(nameServer.Host, nameServer.Port, nameServer.Protocol, resolvedNameServers));
                 else
                     resolvedNameServers.Add(nameServer);
             }
 
+            await Task.WhenAll(resolverTasks);
+
             return resolvedNameServers;
         }
 
-        private async Task ResolveNameServerAddressesAsync(string nsDomain, int port, DnsTransportProtocol protocol, List<NameServerAddress> outNameServers)
+        private async Task ResolveNameServerAddressesAsync(string nsDomain, int port, DnsTransportProtocol protocol, List<NameServerAddress> outNameServers, CancellationToken cancellationToken = default)
         {
             try
             {
-                DnsDatagram response = await _dnsServer.DirectQueryAsync(new DnsQuestionRecord(nsDomain, DnsResourceRecordType.A, DnsClass.IN));
+                DnsDatagram response = await _dnsServer.DirectQueryAsync(new DnsQuestionRecord(nsDomain, DnsResourceRecordType.A, DnsClass.IN), cancellationToken: cancellationToken);
                 if (response.Answer.Count > 0)
                 {
                     IReadOnlyList<IPAddress> addresses = DnsClient.ParseResponseA(response);
@@ -1121,14 +1131,16 @@ namespace DnsServerCore.Dns.Zones
                         outNameServers.Add(new NameServerAddress(nsDomain, new IPEndPoint(address, port), protocol));
                 }
             }
-            catch
-            { }
+            catch (Exception ex)
+            {
+                _dnsServer.ResolverLogManager?.Write(ex);
+            }
 
             if (_dnsServer.PreferIPv6)
             {
                 try
                 {
-                    DnsDatagram response = await _dnsServer.DirectQueryAsync(new DnsQuestionRecord(nsDomain, DnsResourceRecordType.AAAA, DnsClass.IN));
+                    DnsDatagram response = await _dnsServer.DirectQueryAsync(new DnsQuestionRecord(nsDomain, DnsResourceRecordType.AAAA, DnsClass.IN), cancellationToken: cancellationToken);
                     if (response.Answer.Count > 0)
                     {
                         IReadOnlyList<IPAddress> addresses = DnsClient.ParseResponseAAAA(response);
@@ -1136,8 +1148,10 @@ namespace DnsServerCore.Dns.Zones
                             outNameServers.Add(new NameServerAddress(nsDomain, new IPEndPoint(address, port), protocol));
                     }
                 }
-                catch
-                { }
+                catch (Exception ex)
+                {
+                    _dnsServer.ResolverLogManager?.Write(ex);
+                }
             }
         }
 
@@ -1190,16 +1204,9 @@ namespace DnsServerCore.Dns.Zones
                 if (catalogZone is not null)
                 {
                     if (value)
-                    {
-                        //remove catalog zone membership without removing it from zone's options
-                        catalogZone.RemoveMemberZone(_name);
-                        _dnsServer.AuthZoneManager.SaveZoneFile(catalogZone._name);
-                    }
+                        _dnsServer.AuthZoneManager.RemoveCatalogMemberZone(new AuthZoneInfo(this), true); //remove catalog zone membership without removing it from zone's options
                     else
-                    {
-                        //add catalog zone membership
-                        _dnsServer.AuthZoneManager.AddCatalogMemberZone(_catalogZoneName, new AuthZoneInfo(this), true);
-                    }
+                        _dnsServer.AuthZoneManager.AddCatalogMemberZone(_catalogZoneName, new AuthZoneInfo(this), true); //add catalog zone membership
                 }
             }
         }
@@ -1254,7 +1261,7 @@ namespace DnsServerCore.Dns.Zones
                     //update global custom property
                     thisCatalogZone.SetAllowQueryProperty(GetQueryAccessACL());
                 }
-                else if (!Disabled && ((this is PrimaryZone) || (this is StubZone) || (this is ForwarderZone)))
+                else if (!Disabled && ((this is PrimaryZone) || (this is SecondaryZone && this is not SecondaryForwarderZone) || (this is StubZone) || (this is ForwarderZone)))
                 {
                     CatalogZone catalogZone = CatalogZone;
                     if (catalogZone is not null)
@@ -1295,7 +1302,7 @@ namespace DnsServerCore.Dns.Zones
                     //update global custom property
                     thisCatalogZone.SetAllowTransferProperty(GetZoneTranferACL());
                 }
-                else if (!Disabled && (this is PrimaryZone))
+                else if (!Disabled && ((this is PrimaryZone) || (this is SecondaryZone && this is not SecondaryForwarderZone)))
                 {
                     CatalogZone catalogZone = CatalogZone;
                     if (catalogZone is not null)
@@ -1323,7 +1330,7 @@ namespace DnsServerCore.Dns.Zones
             }
         }
 
-        public IReadOnlyDictionary<string, object> ZoneTransferTsigKeyNames
+        public IReadOnlySet<string> ZoneTransferTsigKeyNames
         {
             get { return _zoneTransferTsigKeyNames; }
             set
@@ -1341,7 +1348,7 @@ namespace DnsServerCore.Dns.Zones
                     //update global custom property
                     thisCatalogZone.SetZoneTransferTsigKeyNamesProperty(_zoneTransferTsigKeyNames);
                 }
-                else if (!Disabled && (this is PrimaryZone))
+                else if (!Disabled && ((this is PrimaryZone) || (this is SecondaryZone && this is not SecondaryForwarderZone)))
                 {
                     CatalogZone catalogZone = CatalogZone;
                     if (catalogZone is not null)
@@ -1474,7 +1481,7 @@ namespace DnsServerCore.Dns.Zones
                         if (apexZone is CatalogZone catalogZone)
                             _catalogZone = catalogZone;
                     }
-                    else if (this is StubZone)
+                    else if ((this is StubZone) || (this is SecondaryZone && this is not SecondaryForwarderZone))
                     {
                         ApexZone apexZone = _dnsServer.AuthZoneManager.GetApexZone(_catalogZoneName);
                         if (apexZone is CatalogZone catalogZone)
